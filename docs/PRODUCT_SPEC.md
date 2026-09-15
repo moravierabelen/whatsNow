@@ -143,3 +143,18 @@ introduced later, but they should not drive unnecessary MVP complexity.
 6. Responsive and accessible UX
 7. Pragmatic architecture
 8. Avoid unnecessary complexity
+
+### Event eligibility
+
+For the MVP, an event must have:
+
+- a usable start date/time;
+- a physical venue with usable coordinates;
+- an external event URL.
+
+Events representing flexible-admission or timed-entry inventory
+(e.g. listings with Ticketmaster `dates.access`) are excluded from
+the MVP event model.
+
+Events with missing end times remain valid events, but cannot be
+classified as "Happening now" solely from their start time.

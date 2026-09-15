@@ -82,5 +82,16 @@ Before implementing a non-trivial feature:
 3. Identify relevant constraints and existing patterns.
 4. Explain the proposed approach when architectural trade-offs exist.
 5. Implement the smallest appropriate change.
-6. Run relevant tests, linting, and type checks.
+6. Validate the changes according to the Validation section.
 7. Review the resulting diff for unnecessary complexity or unrelated changes.
+
+## Validation
+
+After making code changes:
+
+- Run the relevant tests.
+- Run linting.
+- Run type checking.
+- Run the production build when appropriate.
+- Report the validation commands run and their results.
+- Do not consider the task complete while a relevant validation step is failing.
