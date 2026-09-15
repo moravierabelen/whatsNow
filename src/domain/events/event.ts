@@ -48,6 +48,7 @@ export interface EventImage {
 }
 
 export interface Event {
+  /** Deterministic, reversible, URL-safe encoding of `source` (see `encodeEventId`/`decodeEventId` in `./eventId`). Opaque for URL readability only, not a security boundary — callers should not hand-parse it. */
   id: string
   source: EventSource
   name: string

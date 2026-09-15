@@ -74,16 +74,21 @@ synchronized.
 Users can open an event preview and navigate to a dedicated event
 details page.
 
-## Search and filters
+## Discovery and filters
+
+Discovery is driven by time mode, category, location, and the map/list
+themselves, rather than by a free-text query.
 
 The MVP includes:
 
-- search
 - category filters
 - date/time filters
 
+Free-text search for a known event, artist, or venue may be considered
+in a future iteration, but is not part of the MVP.
+
 Filter state should be represented in the URL where appropriate so
-that searches can be shared and preserved across navigation.
+that results can be shared and preserved across navigation.
 
 ## Event data
 
@@ -106,7 +111,6 @@ format.
 - Event markers
 - Marker/list synchronization
 - Event list
-- Search
 - Basic filters
 - URL-synchronized filters
 - Event details
