@@ -1,6 +1,7 @@
 import { env } from '../../lib/env'
 
 const EVENTS_URL = 'https://app.ticketmaster.com/discovery/v2/events.json'
+const eventDetailUrl = (id: string) => `https://app.ticketmaster.com/discovery/v2/events/${id}.json`
 
 export class TicketmasterRequestError extends Error {
   status?: number
@@ -22,6 +23,22 @@ export async function fetchTicketmasterEvents(params: Record<string, string>): P
   for (const [key, value] of Object.entries(params)) {
     url.searchParams.set(key, value)
   }
+
+  const response = await fetch(url)
+  if (!response.ok) {
+    throw new TicketmasterRequestError(`Ticketmaster request failed with status ${response.status}`, response.status)
+  }
+
+  return response.json()
+}
+
+export async function fetchTicketmasterEventById(id: string): Promise<unknown> {
+  if (!env.TICKETMASTER_API_KEY) {
+    throw new TicketmasterRequestError('VITE_TICKETMASTER_API_KEY is not configured')
+  }
+
+  const url = new URL(eventDetailUrl(id))
+  url.searchParams.set('apikey', env.TICKETMASTER_API_KEY)
 
   const response = await fetch(url)
   if (!response.ok) {

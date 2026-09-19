@@ -4,6 +4,8 @@ import type { Event } from './event'
 import type { TimeMode } from './provider'
 
 export const STARTING_SOON_WINDOW_MINUTES = 180
+export const TONIGHT_START_HOUR = 18
+export const TONIGHT_END_HOUR = 6
 
 export interface TimeWindow {
   start: string
@@ -11,6 +13,12 @@ export interface TimeWindow {
 }
 
 export type NowBucket = 'happening-now' | 'starting-soon' | 'later-today'
+
+/**
+ * `TimeMode` plus `'tonight'`, which isn't part of the approved provider
+ * contract yet. Kept local to the temporal layer until that's revisited.
+ */
+export type ExtendedTimeMode = TimeMode | 'tonight'
 
 function toIsoInstant(date: Date): string {
   return new Date(date.getTime()).toISOString()
@@ -34,9 +42,36 @@ function resolveWeekendWindow(referenceTime: string, timeZone: string): { start:
   return { start: addDays(fridayEvening, 7), end: addDays(mondayMidnight, 7) }
 }
 
-export function resolveTimeWindow(mode: TimeMode, referenceTime: string, timeZone: string): TimeWindow {
+/**
+ * The current-or-next night block, e.g. queried at Saturday 15:00 or at
+ * Sunday 01:00 both resolve to Saturday 18:00 -> Sunday 06:00; queried at
+ * Sunday 10:00 it rolls forward to Sunday 18:00 -> Monday 06:00. Mirrors
+ * `resolveWeekendWindow`'s current-or-next pattern.
+ */
+function resolveTonightWindow(referenceTime: string, timeZone: string): { start: Date; end: Date } {
+  const reference = new TZDate(referenceTime, timeZone)
+  const today = startOfDay(reference)
+  const yesterday = addDays(today, -1)
+
+  const candidateStart = new TZDate(yesterday.getTime(), timeZone)
+  candidateStart.setHours(TONIGHT_START_HOUR, 0, 0, 0)
+  const candidateEnd = new TZDate(today.getTime(), timeZone)
+  candidateEnd.setHours(TONIGHT_END_HOUR, 0, 0, 0)
+
+  if (reference.getTime() < candidateEnd.getTime()) {
+    return { start: candidateStart, end: candidateEnd }
+  }
+  return { start: addDays(candidateStart, 1), end: addDays(candidateEnd, 1) }
+}
+
+export function resolveTimeWindow(mode: ExtendedTimeMode, referenceTime: string, timeZone: string): TimeWindow {
   if (mode === 'weekend') {
     const { start, end } = resolveWeekendWindow(referenceTime, timeZone)
+    return { start: toIsoInstant(start), end: toIsoInstant(end) }
+  }
+
+  if (mode === 'tonight') {
+    const { start, end } = resolveTonightWindow(referenceTime, timeZone)
     return { start: toIsoInstant(start), end: toIsoInstant(end) }
   }
 

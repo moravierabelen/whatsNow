@@ -150,3 +150,58 @@ describe('classifyNowBucket', () => {
     expect(classifyNowBucket(interval(justAfterMidnightLocal), lateReferenceTime, MADRID)).toBeNull()
   })
 })
+
+describe('resolveTimeWindow — Tonight', () => {
+  // 2026-09-19 is a real Saturday; 2026-09-20 the following Sunday.
+  const saturdayNight = { start: '2026-09-19T16:00:00.000Z', end: '2026-09-20T04:00:00.000Z' }
+  const sundayNight = { start: '2026-09-20T16:00:00.000Z', end: '2026-09-21T04:00:00.000Z' }
+
+  it('resolves to the upcoming night when queried in the afternoon (Saturday 15:00)', () => {
+    expect(resolveTimeWindow('tonight', '2026-09-19T13:00:00Z', MADRID)).toEqual(saturdayNight)
+  })
+
+  it('resolves to the same night when queried right at its start (Saturday 18:00)', () => {
+    expect(resolveTimeWindow('tonight', '2026-09-19T16:00:00Z', MADRID)).toEqual(saturdayNight)
+  })
+
+  it('still resolves to the same night when queried after midnight (Sunday 01:00)', () => {
+    expect(resolveTimeWindow('tonight', '2026-09-19T23:00:00Z', MADRID)).toEqual(saturdayNight)
+  })
+
+  it('rolls forward to the next night once the window has closed (Sunday 10:00)', () => {
+    expect(resolveTimeWindow('tonight', '2026-09-20T08:00:00Z', MADRID)).toEqual(sundayNight)
+  })
+})
+
+describe('eventOverlapsWindow — Tonight', () => {
+  const referenceTime = '2026-09-19T13:00:00Z' // Saturday 15:00 local
+  const tonight = resolveTimeWindow('tonight', referenceTime, MADRID)
+
+  it('includes a late-night event with no known end, starting at 23:59 local', () => {
+    expect(eventOverlapsWindow(interval('2026-09-19T21:59:00Z'), tonight)).toBe(true)
+  })
+
+  it('includes an event starting at 01:30 local the following day, with no known end', () => {
+    expect(eventOverlapsWindow(interval('2026-09-19T23:30:00Z'), tonight)).toBe(true)
+  })
+
+  it('includes an event that starts before the window and, with a known end, extends into it', () => {
+    // 17:00 -> 19:00 local: starts before Tonight's 18:00 boundary, ends inside it.
+    expect(eventOverlapsWindow(interval('2026-09-19T15:00:00Z', '2026-09-19T17:00:00Z'), tonight)).toBe(true)
+  })
+
+  it('excludes a daytime event with a known end that is over before the window starts', () => {
+    // 10:00 -> 14:00 local, well before the 18:00 start of Tonight.
+    expect(eventOverlapsWindow(interval('2026-09-19T08:00:00Z', '2026-09-19T12:00:00Z'), tonight)).toBe(false)
+  })
+
+  it('excludes an event that ends exactly at the 18:00 start of the window', () => {
+    const threeHoursBefore = new Date(new Date(tonight.start).getTime() - 3 * 3_600_000).toISOString()
+    expect(eventOverlapsWindow(interval(threeHoursBefore, tonight.start), tonight)).toBe(false)
+  })
+
+  it('excludes an event that starts exactly at the 06:00 end of the window', () => {
+    const twoHoursLater = new Date(new Date(tonight.end).getTime() + 2 * 3_600_000).toISOString()
+    expect(eventOverlapsWindow(interval(tonight.end, twoHoursLater), tonight)).toBe(false)
+  })
+})
