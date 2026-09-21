@@ -51,3 +51,29 @@ export interface JamBaseEvent {
   offers?: JamBaseOffer[]
   performer?: JamBasePerformer[]
 }
+
+export interface JamBasePagination {
+  page: number
+  perPage: number
+  totalItems: number
+  totalPages: number
+  nextPage: string | null
+  previousPage: string | null
+}
+
+export interface JamBaseEventSearchResponse {
+  success: boolean
+  pagination: JamBasePagination
+  events: JamBaseEvent[]
+}
+
+export interface JamBaseEventDetailResponse {
+  success: boolean
+  event: JamBaseEvent
+}
+
+/** Confirmed against the real API: 400s carry this shape, e.g. `identifier_invalid` for a not-found lookup. */
+export interface JamBaseErrorResponse {
+  success: false
+  errors: { code: string; message: string }[]
+}
