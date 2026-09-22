@@ -80,12 +80,24 @@ describe('App', () => {
     const page: EventPage = { events: [SAMPLE_EVENT], hasNextPage: false }
     mockedSearchEvents.mockResolvedValue(page)
 
-    renderApp('/')
+    const { container } = renderApp('/')
 
     expect(await screen.findByText('Test Concert')).toBeInTheDocument()
     expect(screen.getByText('music')).toBeInTheDocument()
     expect(screen.getByText('Test Venue')).toBeInTheDocument()
     expect(screen.getByText('2026-09-22T20:00:00.000Z')).toBeInTheDocument()
+    // EventMap renders a `.leaflet-container` root — confirms the map is
+    // actually wired to the real search results, not just the list.
+    expect(container.querySelector('.leaflet-container')).toBeInTheDocument()
+  })
+
+  it('does not render the map when the search resolves with no events', async () => {
+    mockedSearchEvents.mockResolvedValue({ events: [], hasNextPage: false })
+
+    const { container } = renderApp('/')
+
+    expect(await screen.findByText('No events found.')).toBeInTheDocument()
+    expect(container.querySelector('.leaflet-container')).not.toBeInTheDocument()
   })
 
   it('shows an explicit empty state when the search resolves with no events', async () => {
