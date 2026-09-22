@@ -5,7 +5,7 @@ import type {
   EventProviderId,
 } from './event'
 
-export type TimeMode = 'now' | 'today' | 'tomorrow' | 'weekend'
+export type TimeMode = 'now' | 'tonight' | 'today' | 'tomorrow' | 'weekend'
 
 export type EventLocation =
   | {

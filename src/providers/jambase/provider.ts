@@ -1,4 +1,5 @@
 import { TZDate } from '@date-fns/tz'
+import { getCityConfig } from '../../domain/cities'
 import { eventOverlapsWindow, resolveTimeWindow } from '../../domain/events/temporal'
 import type { Event } from '../../domain/events/event'
 import type { EventLocation, EventPage, EventProvider, EventSearchParams } from '../../domain/events/provider'
@@ -6,22 +7,16 @@ import { JamBaseRequestError, fetchJamBaseEventById, fetchJamBaseEvents } from '
 import { mapJamBaseEvent } from './mapper'
 import type { JamBaseEventDetailResponse, JamBaseEventSearchResponse } from './types'
 
-/**
- * Same reasoning as Ticketmaster's SUPPORTED_CITIES: the domain contract
- * only carries a citySlug; JamBase's own query vocabulary (coordinates +
- * radius — there is no working city-name parameter) and the IANA timezone
- * are provider-specific facts.
- */
-const SUPPORTED_CITIES: Record<string, { latitude: number; longitude: number; radiusKm: number; timeZone: string }> =
-  {
-    barcelona: { latitude: 41.3851, longitude: 2.1734, radiusKm: 15, timeZone: 'Europe/Madrid' },
-  }
-
 const DEFAULT_PER_PAGE = 20
 
+/**
+ * JamBase's query vocabulary is coordinates + radius (there is no working
+ * city-name parameter), so the shared `domain/cities` config already has
+ * everything this provider needs — nothing provider-specific to add here.
+ */
 function resolveLocationParams(location: EventLocation): { params: Record<string, string>; timeZone: string } {
   if (location.type === 'city') {
-    const config = SUPPORTED_CITIES[location.citySlug]
+    const config = getCityConfig(location.citySlug)
     if (!config) {
       throw new Error(`Unsupported city: ${location.citySlug}`)
     }

@@ -1,3 +1,4 @@
+import { getCityConfig } from '../../domain/cities'
 import { resolveTimeWindow } from '../../domain/events/temporal'
 import type { Event, EventCategory } from '../../domain/events/event'
 import type { EventLocation, EventPage, EventProvider, EventSearchParams } from '../../domain/events/provider'
@@ -7,12 +8,11 @@ import { mapTicketmasterEvent } from './mapper'
 import type { TicketmasterEvent, TicketmasterEventSearchResponse } from './types'
 
 /**
- * The domain contract only carries a `citySlug` — Ticketmaster's own city
- * query vocabulary and the IANA timezone needed for window math are
- * provider-specific facts, so they live here rather than in the domain.
+ * Ticketmaster's own city-name query vocabulary — a provider-specific fact
+ * on top of the shared city/timezone/coordinates config in `domain/cities`.
  */
-const SUPPORTED_CITIES: Record<string, { city: string; countryCode: string; timeZone: string }> = {
-  barcelona: { city: 'Barcelona', countryCode: 'ES', timeZone: 'Europe/Madrid' },
+const TICKETMASTER_CITY_PARAMS: Record<string, { city: string; countryCode: string }> = {
+  barcelona: { city: 'Barcelona', countryCode: 'ES' },
 }
 
 /**
@@ -32,13 +32,14 @@ const CATEGORY_TO_CLASSIFICATION_NAME: Partial<Record<EventCategory, string>> = 
 
 function resolveLocationParams(location: EventLocation): { params: Record<string, string>; timeZone: string } {
   if (location.type === 'city') {
-    const config = SUPPORTED_CITIES[location.citySlug]
-    if (!config) {
+    const cityConfig = getCityConfig(location.citySlug)
+    const tmParams = TICKETMASTER_CITY_PARAMS[location.citySlug]
+    if (!cityConfig || !tmParams) {
       throw new Error(`Unsupported city: ${location.citySlug}`)
     }
     return {
-      params: { city: config.city, countryCode: config.countryCode },
-      timeZone: config.timeZone,
+      params: { city: tmParams.city, countryCode: tmParams.countryCode },
+      timeZone: cityConfig.timeZone,
     }
   }
 

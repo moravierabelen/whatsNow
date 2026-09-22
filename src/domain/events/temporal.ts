@@ -14,12 +14,6 @@ export interface TimeWindow {
 
 export type NowBucket = 'happening-now' | 'starting-soon' | 'later-today'
 
-/**
- * `TimeMode` plus `'tonight'`, which isn't part of the approved provider
- * contract yet. Kept local to the temporal layer until that's revisited.
- */
-export type ExtendedTimeMode = TimeMode | 'tonight'
-
 function toIsoInstant(date: Date): string {
   return new Date(date.getTime()).toISOString()
 }
@@ -64,7 +58,7 @@ function resolveTonightWindow(referenceTime: string, timeZone: string): { start:
   return { start: addDays(candidateStart, 1), end: addDays(candidateEnd, 1) }
 }
 
-export function resolveTimeWindow(mode: ExtendedTimeMode, referenceTime: string, timeZone: string): TimeWindow {
+export function resolveTimeWindow(mode: TimeMode, referenceTime: string, timeZone: string): TimeWindow {
   if (mode === 'weekend') {
     const { start, end } = resolveWeekendWindow(referenceTime, timeZone)
     return { start: toIsoInstant(start), end: toIsoInstant(end) }

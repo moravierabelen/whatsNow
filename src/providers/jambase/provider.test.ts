@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { ExtendedTimeMode } from '../../domain/events/temporal'
 import type { EventLocation, EventSearchParams } from '../../domain/events/provider'
 import { JamBaseRequestError, fetchJamBaseEventById, fetchJamBaseEvents } from './client'
 import { jamBaseProvider } from './provider'
@@ -47,22 +46,13 @@ function rawEvent(overrides: Partial<JamBaseEvent> = {}): JamBaseEvent {
   }
 }
 
-/**
- * `EventSearchParams.timeMode` is still typed as the approved `TimeMode`
- * (no `'tonight'`) — untouched here on purpose. The provider itself already
- * supports `'tonight'` internally via `resolveTimeWindow`'s `ExtendedTimeMode`,
- * so these tests deliberately exercise that ahead of the public contract
- * being updated; the cast below is the seam, not a contract change.
- */
-function searchParams(
-  overrides: Partial<Omit<EventSearchParams, 'timeMode'>> & { timeMode?: ExtendedTimeMode } = {},
-): EventSearchParams {
+function searchParams(overrides: Partial<EventSearchParams> = {}): EventSearchParams {
   return {
     timeMode: 'today',
     referenceTime: REFERENCE_TIME,
     location: BARCELONA,
     ...overrides,
-  } as EventSearchParams
+  }
 }
 
 afterEach(() => {
