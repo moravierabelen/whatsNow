@@ -43,8 +43,11 @@ export type EventCategory =
 
 export interface EventImage {
   url: string
-  width: number
-  height: number
+  /** Not every provider gives us dimensions (e.g. JamBase's performer photo
+   * is a bare URL) — optional rather than fabricated. No current renderer
+   * relies on these; they're informational only. */
+  width?: number
+  height?: number
 }
 
 export interface Event {

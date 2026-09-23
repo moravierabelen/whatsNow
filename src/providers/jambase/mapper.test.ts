@@ -56,7 +56,7 @@ describe('mapJamBaseEvent', () => {
         city: 'Barcelona',
       },
       url: 'https://link.dice.fm/xe95d6dc4cdf?utm_source=jambase',
-      image: undefined,
+      image: { url: 'https://www.jambase.com/wp-content/uploads/fritz-kalkbrenner.jpg' },
       priceRange: undefined,
     })
   })
@@ -93,8 +93,20 @@ describe('mapJamBaseEvent', () => {
     expect(mapJamBaseEvent(baseEvent({ performer: undefined }))?.category).toBe('music')
   })
 
-  it('never maps an image, even when the raw event has one', () => {
+  it('maps the top-level image URL, without width/height (JamBase never gives dimensions)', () => {
     const result = mapJamBaseEvent(baseEvent())
+
+    expect(result?.image).toEqual({ url: 'https://www.jambase.com/wp-content/uploads/fritz-kalkbrenner.jpg' })
+  })
+
+  it('leaves image undefined when the raw event has none', () => {
+    const result = mapJamBaseEvent(baseEvent({ image: undefined }))
+
+    expect(result?.image).toBeUndefined()
+  })
+
+  it('leaves image undefined for an unusable image URL, rather than passing it through', () => {
+    const result = mapJamBaseEvent(baseEvent({ image: 'not-a-url' }))
 
     expect(result?.image).toBeUndefined()
   })

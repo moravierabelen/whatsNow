@@ -63,6 +63,13 @@ describe('useEventSearchFromUrl — reading state', () => {
     expect(params.categories).toBeUndefined()
   })
 
+  it('exposes urlState with citySlug already defaulted, for driving nav UI without re-parsing the URL', async () => {
+    const { result } = renderHook(() => useTestHarness(), { wrapper: createWrapper(['/']) })
+
+    await waitFor(() => expect(mockedSearchEvents).toHaveBeenCalledTimes(1))
+    expect(result.current.query.urlState).toEqual({ timeMode: 'now', citySlug: 'barcelona', page: 1 })
+  })
+
   it('produces the same search for an explicit city=barcelona as for no city at all', async () => {
     renderHook(() => useTestHarness(), { wrapper: createWrapper(['/?city=barcelona']) })
 

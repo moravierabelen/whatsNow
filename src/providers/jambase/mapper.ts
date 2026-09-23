@@ -1,6 +1,6 @@
 import { TZDate } from '@date-fns/tz'
 import { encodeEventId } from '../../domain/events/eventId'
-import type { Event, EventCategory, PriceRange, Venue } from '../../domain/events/event'
+import type { Event, EventCategory, EventImage, PriceRange, Venue } from '../../domain/events/event'
 import type { JamBaseEvent, JamBaseOffer, JamBasePriceSpecification, JamBaseVenue } from './types'
 
 const EXTERNAL_ID_PREFIX = 'jambase:'
@@ -44,6 +44,16 @@ function mapVenue(location: JamBaseVenue | undefined): Venue | null {
     address: location.address?.streetAddress,
     city: location.address?.addressLocality,
   }
+}
+
+/**
+ * JamBase gives no width/height for this image (unlike Ticketmaster) — that's
+ * why `EventImage.width`/`height` are optional in the domain. Observed in
+ * real data to be the same URL as the event's headliner performer photo, so
+ * the top-level field is used directly rather than reaching into `performer`.
+ */
+function mapImage(url: string | undefined): EventImage | undefined {
+  return isUsableUrl(url) ? { url } : undefined
 }
 
 function isUsableUrl(url: string | undefined): url is string {
@@ -120,7 +130,7 @@ export function mapJamBaseEvent(raw: JamBaseEvent): Event | null {
       spansMultipleDays: computeSpansMultipleDays(raw.startDate, raw.endDate),
       venue,
       url,
-      image: undefined,
+      image: mapImage(raw.image),
       priceRange: offer ? mapPriceRange(offer.priceSpecification) : undefined,
     }
   } catch {
