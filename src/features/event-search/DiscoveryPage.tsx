@@ -7,7 +7,7 @@ import { BrandHeader } from './BrandHeader'
 import { CATEGORY_LABEL } from './categoryPresentation'
 import { CategoryNav } from './CategoryNav'
 import { EmptyState } from './EmptyState'
-import { formatEventTime, isEventLiveNow } from './eventDisplay'
+import { formatEventTime, formatWeekdayTime, isEventLiveNow } from './eventDisplay'
 import { groupByNowBucket, selectFeaturedEvent, sortByStart } from './eventSelection'
 import { EventListItem } from './EventListItem'
 import { FeaturedEvent } from './FeaturedEvent'
@@ -176,7 +176,11 @@ export function DiscoveryPage() {
                   className={`hero-grid grid grid-cols-1 gap-4 lg:h-110 lg:gap-0 ${featured ? 'lg:grid-cols-[3fr_2fr]' : ''}`}
                 >
                   <div className="map-surface h-[50vh] w-full lg:h-full">
-                    <EventMap events={showFeaturedHero ? events : []} />
+                    {/* Markers need a real instant — an event with only a
+                        known date (no confirmed time) can't be placed on a
+                        temporal map without implying a start time we don't
+                        actually have. */}
+                    <EventMap events={showFeaturedHero ? events.filter((event) => event.start.timeKnown) : []} />
                   </div>
                   {featured && (
                     <div className="hero-panel">
@@ -203,7 +207,14 @@ export function DiscoveryPage() {
                         key={event.id}
                         event={event}
                         live={isEventLiveNow(event, referenceTime)}
-                        timeLabel={formatEventTime(event, referenceTime)}
+                        // Weekend mixes multiple days — "Today"/"Tomorrow"
+                        // framing (and a full date) don't fit the narrow
+                        // column and read inconsistently row to row; every
+                        // other mode's listing is a single implied day, so
+                        // it keeps the relative phrasing.
+                        timeLabel={
+                          urlState.timeMode === 'weekend' ? formatWeekdayTime(event) : formatEventTime(event, referenceTime)
+                        }
                       />
                     ))}
                   </ul>

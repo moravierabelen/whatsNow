@@ -9,9 +9,9 @@ import {
 
 const MADRID = 'Europe/Madrid'
 
-function interval(startUtc: string, endUtc?: string): Pick<Event, 'start' | 'end'> {
+function interval(startUtc: string, endUtc?: string, timeKnown = true): Pick<Event, 'start' | 'end'> {
   return {
-    start: { utc: startUtc, timeZone: MADRID },
+    start: { utc: startUtc, timeZone: MADRID, timeKnown },
     end: endUtc === undefined ? undefined : { utc: endUtc, timeZone: MADRID },
   }
 }
@@ -148,6 +148,22 @@ describe('classifyNowBucket', () => {
     const lateReferenceTime = '2026-09-15T21:00:00Z'
     const justAfterMidnightLocal = '2026-09-15T22:30:00Z'
     expect(classifyNowBucket(interval(justAfterMidnightLocal), lateReferenceTime, MADRID)).toBeNull()
+  })
+
+  it('classifies a date-only (timeKnown: false) event within Today as later-today, never happening-now/starting-soon', () => {
+    // Anchor is local midnight — numerically already "passed" relative to
+    // referenceTime, same as any other event with no known end, but this
+    // must still surface as later-today rather than falling through to null.
+    const localMidnightAnchor = '2026-09-14T22:00:00.000Z' // 2026-09-15T00:00 local (Europe/Madrid)
+    expect(classifyNowBucket(interval(localMidnightAnchor, undefined, false), referenceTime, MADRID)).toBe(
+      'later-today',
+    )
+  })
+
+  it('never classifies a date-only event as happening-now, even with a start/end straddling referenceTime', () => {
+    expect(
+      classifyNowBucket(interval('2026-09-15T10:00:00Z', '2026-09-15T14:00:00Z', false), referenceTime, MADRID),
+    ).toBe('later-today')
   })
 })
 

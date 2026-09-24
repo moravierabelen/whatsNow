@@ -46,9 +46,9 @@ describe('mapJamBaseEvent', () => {
       source: { provider: 'jambase', externalId: '16309935' },
       name: 'Fritz Kalkbrenner at SEASEACLUB',
       category: 'music',
-      start: { utc: '2026-09-19T14:30:00.000Z', timeZone: 'Europe/Madrid' },
+      start: { utc: '2026-09-19T14:30:00.000Z', timeZone: 'Europe/Madrid', timeKnown: true },
       end: undefined,
-      spansMultipleDays: false,
+      endDate: undefined,
       venue: {
         name: 'SEASEACLUB',
         coordinates: { latitude: 41.4138, longitude: 2.2293 },
@@ -115,7 +115,22 @@ describe('mapJamBaseEvent', () => {
     const result = mapJamBaseEvent(baseEvent({ startDate: '2026-09-19T23:59:00' }))
 
     // 23:59 CEST (+2) -> 21:59 UTC
-    expect(result?.start).toEqual({ utc: '2026-09-19T21:59:00.000Z', timeZone: 'Europe/Madrid' })
+    expect(result?.start).toEqual({ utc: '2026-09-19T21:59:00.000Z', timeZone: 'Europe/Madrid', timeKnown: true })
+  })
+
+  it('conserves a date-only startDate (no time component), anchored to local midnight, marked timeKnown: false', () => {
+    const result = mapJamBaseEvent(baseEvent({ startDate: '2026-09-25' }))
+
+    expect(result).not.toBeNull()
+    // Local midnight in Europe/Madrid (CEST, UTC+2) on 2026-09-25 -> 2026-09-24T22:00 UTC.
+    // Previously this was misparsed as UTC midnight (2026-09-25T00:00Z), i.e. 02:00 local — a fabricated time.
+    expect(result?.start).toEqual({ utc: '2026-09-24T22:00:00.000Z', timeZone: 'Europe/Madrid', timeKnown: false })
+  })
+
+  it('still maps a startDate with a real time component as timeKnown: true, unaffected by the date-only handling', () => {
+    const result = mapJamBaseEvent(baseEvent({ startDate: '2026-09-19T16:30:00' }))
+
+    expect(result?.start).toEqual({ utc: '2026-09-19T14:30:00.000Z', timeZone: 'Europe/Madrid', timeKnown: true })
   })
 
   it('never derives Event.end from endDate, even when endDate is present', () => {
@@ -232,12 +247,30 @@ describe('mapJamBaseEvent', () => {
     expect(result?.priceRange).toBeUndefined()
   })
 
-  it('computes spansMultipleDays from the date-only comparison, without inventing an end time', () => {
-    const sameDay = mapJamBaseEvent(baseEvent({ startDate: '2026-09-19T16:30:00', endDate: '2026-09-19' }))
-    expect(sameDay?.spansMultipleDays).toBe(false)
+  it('leaves endDate undefined when it matches startDate\'s own local date (not a real range)', () => {
+    const result = mapJamBaseEvent(baseEvent({ startDate: '2026-09-19T16:30:00', endDate: '2026-09-19' }))
 
-    const differentDay = mapJamBaseEvent(baseEvent({ startDate: '2026-09-19T16:30:00', endDate: '2026-09-21' }))
-    expect(differentDay?.spansMultipleDays).toBe(true)
-    expect(differentDay?.end).toBeUndefined()
+    expect(result?.endDate).toBeUndefined()
+  })
+
+  it('carries endDate through, unmodified, when it differs from startDate\'s local date', () => {
+    const result = mapJamBaseEvent(baseEvent({ startDate: '2026-09-19T16:30:00', endDate: '2026-09-21' }))
+
+    expect(result?.endDate).toBe('2026-09-21')
+    // Still never a fabricated end instant — only a real end *time* would justify `end`.
+    expect(result?.end).toBeUndefined()
+  })
+
+  it('leaves endDate undefined when the raw event has none', () => {
+    const result = mapJamBaseEvent(baseEvent({ endDate: undefined }))
+
+    expect(result?.endDate).toBeUndefined()
+  })
+
+  it('preserves endDate for a genuinely multi-day, date-only festival listing (the "Be Prog! My Friend" case)', () => {
+    const result = mapJamBaseEvent(baseEvent({ startDate: '2026-09-25', endDate: '2026-09-26' }))
+
+    expect(result?.start).toEqual({ utc: '2026-09-24T22:00:00.000Z', timeZone: 'Europe/Madrid', timeKnown: false })
+    expect(result?.endDate).toBe('2026-09-26')
   })
 })

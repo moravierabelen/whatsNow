@@ -25,10 +25,14 @@ function event(id: string, provider: 'ticketmaster' | 'jambase'): Event {
   return {
     id,
     source: { provider, externalId: id },
-    name: `Event ${id}`,
+    // Deliberately just the bare id, not "Event {id}" — a shared "Event"
+    // word plus the same default venue/time would make every pair of
+    // fixtures in this file look like a plausible cross-provider
+    // duplicate to `deduplicateEvents`, which isn't what these tests (not
+    // about deduplication) are asserting.
+    name: id,
     category: 'music',
-    start: { utc: '2026-09-19T19:00:00Z', timeZone: 'Europe/Madrid' },
-    spansMultipleDays: false,
+    start: { utc: '2026-09-19T19:00:00Z', timeZone: 'Europe/Madrid', timeKnown: true },
     venue: { name: 'Venue', coordinates: { latitude: 41.38, longitude: 2.17 } },
     url: 'https://example.com',
   }
@@ -113,9 +117,23 @@ describe('searchEvents (aggregator)', () => {
     await expect(searchEvents(params())).rejects.toThrow('jambase boom')
   })
 
-  it('does not deduplicate events with different ids, even if otherwise similar', async () => {
-    const tmEvent = { ...event('tm-1', 'ticketmaster'), name: 'Same Concert' }
-    const jbEvent = { ...event('jb-1', 'jambase'), name: 'Same Concert' }
+  it('deduplicates a genuine cross-provider duplicate (same time/venue, matching name) into one event', async () => {
+    // Full matching heuristic (name/location scenarios) is covered in
+    // deduplicateEvents.test.ts — this just confirms searchEvents actually
+    // applies it, not the old "never merge" behavior.
+    const tmEvent = { ...event('tm-1', 'ticketmaster'), name: 'Only The Poets - AND I’D DO IT AGAIN' }
+    const jbEvent = { ...event('jb-1', 'jambase'), name: 'Only The Poets at Venue' }
+    mockedTicketmasterSearch.mockResolvedValue({ events: [tmEvent], hasNextPage: false })
+    mockedJamBaseSearch.mockResolvedValue({ events: [jbEvent], hasNextPage: false })
+
+    const result = await searchEvents(params())
+
+    expect(result.events).toHaveLength(1)
+  })
+
+  it('does not deduplicate events with different ids when they represent clearly different plans', async () => {
+    const tmEvent = { ...event('tm-1', 'ticketmaster'), name: 'Totally Unrelated Thing' }
+    const jbEvent = { ...event('jb-1', 'jambase'), name: 'Something Else Entirely' }
     mockedTicketmasterSearch.mockResolvedValue({ events: [tmEvent], hasNextPage: false })
     mockedJamBaseSearch.mockResolvedValue({ events: [jbEvent], hasNextPage: false })
 

@@ -95,6 +95,11 @@ export function classifyNowBucket(
   const todayWindow = resolveTimeWindow('today', referenceTime, timeZone)
   if (!eventOverlapsWindow(event, todayWindow)) return null
 
+  // A date-only event (`timeKnown: false`) is known to be today, but never
+  // "happening now" or "starting soon" — we have no real clock time to
+  // justify either. `start.utc` in that case is only a same-day anchor.
+  if (!event.start.timeKnown) return 'later-today'
+
   const reference = new Date(referenceTime).getTime()
   const start = new Date(event.start.utc).getTime()
 

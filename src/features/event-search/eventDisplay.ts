@@ -17,18 +17,72 @@ export function formatPrice(priceRange: PriceRange | undefined): string | undefi
   return `${min ?? max} ${currency}`
 }
 
-/** "Today, 20:00" / "Tomorrow, 20:00" / "Fri, Sep 25 · 20:00", in the
+/**
+ * "Fri–Sat" for a genuinely multi-day, no-confirmed-time event (a JamBase
+ * festival listing with only a start/end *date*, e.g. "2026-09-25" –
+ * "2026-09-26") — `undefined` for every other case, so callers fall
+ * through to their own single-day formatting.
+ *
+ * A known start *time* always wins over `endDate`: per product rule, a
+ * show starting Monday 23:00 and running past midnight into Tuesday is
+ * still "Mon 23:00", never a range — so this only ever consults `endDate`
+ * when `start.timeKnown` is false (see `Event.endDate`'s doc comment).
+ * The range is absolute (real weekday labels from `start`/`endDate`), not
+ * relative to `referenceTime` — it stays "Fri–Sat" no matter which day of
+ * the event it's viewed from, which is the whole point of showing a range
+ * instead of a single relative day.
+ */
+function formatDayRange(event: Pick<Event, 'start' | 'endDate'>): string | undefined {
+  if (event.start.timeKnown || !event.endDate) return undefined
+  const { timeZone } = event.start
+  const startZoned = new TZDate(event.start.utc, timeZone)
+  const endZoned = new TZDate(`${event.endDate}T00:00:00`, timeZone)
+  // `endDate` is only meant to be set when it's genuinely different from
+  // start's own local date (see `Event.endDate`'s doc comment) — checked
+  // again here so this function is correct on its own terms, not just by
+  // relying on callers/mappers to uphold that invariant upstream.
+  if (isSameDay(startZoned, endZoned)) return undefined
+  return `${format(startZoned, 'EEE')}–${format(endZoned, 'EEE')}`
+}
+
+/** "Today, 20:00" / "Tomorrow, 20:00" / "Fri, Sep 25 · 20:00" — or, when the
+ * event only has a known date (`timeKnown: false`), "Today, Time TBA" /
+ * "Tomorrow, Time TBA" / "Fri, Sep 25 · Time TBA". A genuinely multi-day
+ * date-only event (see `formatDayRange`) short-circuits all of that in
+ * favor of an absolute range, e.g. "Fri–Sat" — "Today, Time TBA" would be
+ * both less useful and inaccurate on the event's later days. In the
  * event's own venue timezone — each `Event` already carries one.
  * `referenceTime` is explicit, never read from the system clock here, same
  * rule as the rest of this codebase (see `temporal.ts`). */
-export function formatEventTime(event: Pick<Event, 'start'>, referenceTime: string): string {
-  const { utc, timeZone } = event.start
+export function formatEventTime(event: Pick<Event, 'start' | 'endDate'>, referenceTime: string): string {
+  const range = formatDayRange(event)
+  if (range) return range
+
+  const { utc, timeZone, timeKnown } = event.start
   const zoned = new TZDate(utc, timeZone)
   const now = new TZDate(referenceTime, timeZone)
-  const timePart = format(zoned, 'HH:mm')
+  const timePart = timeKnown ? format(zoned, 'HH:mm') : 'Time TBA'
   if (isSameDay(zoned, now)) return `Today, ${timePart}`
   if (isSameDay(zoned, addDays(now, 1))) return `Tomorrow, ${timePart}`
-  return format(zoned, "EEE, MMM d '·' HH:mm")
+  return `${format(zoned, 'EEE, MMM d')} · ${timePart}`
+}
+
+/** Short weekday + time, for listings that mix multiple days (e.g.
+ * Weekend) where "Today"/"Tomorrow" framing and a full date don't fit a
+ * narrow column: "Fri 20:30", or "Fri · Time TBA" when the time isn't
+ * known — or, for a genuinely multi-day date-only event, "Fri–Sat" (see
+ * `formatDayRange`; no "Time TBA" alongside it, the range alone already
+ * says enough). No `referenceTime` needed — unlike `formatEventTime`,
+ * this never varies by how far away "today" is. */
+export function formatWeekdayTime(event: Pick<Event, 'start' | 'endDate'>): string {
+  const range = formatDayRange(event)
+  if (range) return range
+
+  const { utc, timeZone, timeKnown } = event.start
+  const zoned = new TZDate(utc, timeZone)
+  const weekday = format(zoned, 'EEE')
+  if (!timeKnown) return `${weekday} · Time TBA`
+  return `${weekday} ${format(zoned, 'HH:mm')}`
 }
 
 /** Whether an event is happening right now — reuses the domain's own

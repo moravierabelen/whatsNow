@@ -8,10 +8,15 @@ import { isEventLiveNow } from './eventDisplay'
  * with an image, and whatever's happening right now), since there is no
  * map/list selection state yet in this pass. Ported from the equivalent
  * `pickDefaultSelection` heuristic in the foundation UI exploration.
+ *
+ * Events with an unknown start time (`timeKnown: false`) are never
+ * eligible — the hero implies "this is happening at this moment", which we
+ * can't honestly claim without a real time.
  */
 export function selectFeaturedEvent(events: Event[], referenceTime: string): Event | undefined {
-  if (events.length === 0) return undefined
-  const ranked = [...events].sort((a, b) => {
+  const candidates = events.filter((event) => event.start.timeKnown)
+  if (candidates.length === 0) return undefined
+  const ranked = [...candidates].sort((a, b) => {
     const aScore = (a.image ? 0 : 1) - (isEventLiveNow(a, referenceTime) ? 1 : 0)
     const bScore = (b.image ? 0 : 1) - (isEventLiveNow(b, referenceTime) ? 1 : 0)
     if (aScore !== bScore) return aScore - bScore

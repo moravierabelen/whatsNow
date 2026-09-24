@@ -1,9 +1,17 @@
+import {
+  CompassIcon,
+  GuitarIcon,
+  MaskHappyIcon,
+  PersonSimpleTaiChiIcon,
+  PopcornIcon,
+  PuzzlePieceIcon,
+  UsersThreeIcon,
+} from '@phosphor-icons/react'
 import type { EventCategory } from '../../domain/events/event'
 
 /**
  * Category colors/labels, ported from the foundation UI exploration's
- * `@theme` tokens. Category *icons* are a separate, not-yet-decided piece
- * (Phosphor Icons, mapping TBD) — deliberately not included here.
+ * `@theme` tokens.
  */
 export const CATEGORY_ORDER: EventCategory[] = ['music', 'sports', 'arts-and-theatre', 'film', 'family', 'other']
 
@@ -33,3 +41,21 @@ export const CATEGORY_TINT: Record<EventCategory, string> = {
   family: 'var(--color-cat-family-tint)',
   other: 'var(--color-cat-other-tint)',
 }
+
+/**
+ * Category nav icons — Phosphor, presentation-only (not used by
+ * `EventThumbnail`'s fallback or anywhere in the domain). `MasksTheaterIcon`
+ * doesn't exist in the installed Phosphor version; `MaskHappyIcon` is the
+ * confirmed substitute for `arts-and-theatre`.
+ */
+export const CATEGORY_ICON: Record<EventCategory, typeof CompassIcon> = {
+  music: GuitarIcon,
+  sports: PersonSimpleTaiChiIcon,
+  'arts-and-theatre': MaskHappyIcon,
+  film: PopcornIcon,
+  family: UsersThreeIcon,
+  other: PuzzlePieceIcon,
+}
+
+/** Not an `EventCategory` — `CategoryNav`'s "All" tab needs an icon too. */
+export const ALL_CATEGORY_ICON = CompassIcon

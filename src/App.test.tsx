@@ -21,8 +21,7 @@ const SAMPLE_EVENT: Event = {
   // Computed relative to "now" (not a fixed calendar date) so this stays
   // classified as "starting soon" — and therefore in the normal
   // featured/hero path — regardless of when the suite actually runs.
-  start: { utc: new Date(Date.now() + 60 * 60 * 1000).toISOString(), timeZone: 'Europe/Madrid' },
-  spansMultipleDays: false,
+  start: { utc: new Date(Date.now() + 60 * 60 * 1000).toISOString(), timeZone: 'Europe/Madrid', timeKnown: true },
   venue: { name: 'Test Venue', coordinates: { latitude: 41.38, longitude: 2.17 } },
   url: 'https://example.com/event',
 }
@@ -135,7 +134,7 @@ describe('App', () => {
         ...SAMPLE_EVENT,
         id: 'evt-later',
         // Well past the 180min "starting soon" window, same local day.
-        start: { utc: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString(), timeZone: 'Europe/Madrid' },
+        start: { utc: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString(), timeZone: 'Europe/Madrid', timeKnown: true },
       }
       mockedSearchEvents.mockResolvedValue({ events: [laterToday], hasNextPage: false })
 
@@ -200,8 +199,9 @@ describe('App', () => {
     // The disabled-query branch renders only the header chrome, no <main>
     // (nothing to search for) — waiting for the header's city context to
     // settle confirms rendering has finished before asserting nothing was
-    // fetched.
-    await waitFor(() => expect(screen.getByText('Atlantis')).toBeInTheDocument())
+    // fetched. The name renders twice (mobile-abbreviation + desktop-full
+    // variants, both present in the DOM — CSS decides which is visible).
+    await waitFor(() => expect(screen.getAllByText('Atlantis').length).toBeGreaterThan(0))
     expect(screen.queryByRole('main')).not.toBeInTheDocument()
     expect(mockedSearchEvents).not.toHaveBeenCalled()
   })

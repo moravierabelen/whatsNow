@@ -40,9 +40,8 @@ describe('mapTicketmasterEvent', () => {
       source: { provider: 'ticketmaster', externalId: 'tm-123' },
       name: 'Test Concert',
       category: 'music',
-      start: { utc: '2026-09-18T19:00:00Z', timeZone: 'Europe/Madrid' },
+      start: { utc: '2026-09-18T19:00:00Z', timeZone: 'Europe/Madrid', timeKnown: true },
       end: { utc: '2026-09-18T22:00:00Z', timeZone: 'Europe/Madrid' },
-      spansMultipleDays: false,
       venue: {
         name: 'Sala Razzmatazz',
         coordinates: { latitude: 41.39701, longitude: 2.19147 },

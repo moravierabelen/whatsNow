@@ -92,14 +92,42 @@ function toUtcInstant(localNaive: string, timeZone: string): string | null {
   return new Date(time).toISOString()
 }
 
+const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/
+
 /**
- * Informational only — not used by any temporal logic. Best-effort
- * comparison of startDate's date portion against endDate; JamBase's
- * endDate is date-only, so this can never produce an `Event.end`.
+ * JamBase's `startDate` is usually a naive local datetime, but for some
+ * listings (festivals in particular) it's just a date, e.g. "2026-09-25" —
+ * no time component at all. Silently feeding that into `toUtcInstant`
+ * previously parsed it as an ISO date-only string (UTC midnight per the JS
+ * spec), not local midnight — producing a fabricated, wrong-timezone
+ * instant (a real event showing "02:00" for a source with no time at all).
+ *
+ * `timeKnown: false` here means: `utc` is only a same-day anchor (local
+ * midnight, so date/window-membership checks stay correct) — every
+ * consumer that would present a real clock time or classify the event as
+ * imminent/live must check this flag first, never trust `utc` alone.
  */
-function computeSpansMultipleDays(startDate: string | undefined, endDate: string | undefined): boolean {
-  if (!startDate || !endDate) return false
-  return startDate.slice(0, 10) !== endDate
+function parseStartDate(rawStartDate: string, timeZone: string): { utc: string; timeKnown: boolean } | null {
+  if (DATE_ONLY_PATTERN.test(rawStartDate)) {
+    const utc = toUtcInstant(`${rawStartDate}T00:00:00`, timeZone)
+    return utc ? { utc, timeKnown: false } : null
+  }
+  const utc = toUtcInstant(rawStartDate, timeZone)
+  return utc ? { utc, timeKnown: true } : null
+}
+
+/**
+ * JamBase's `endDate` is always date-only (see `JamBaseEvent.endDate`),
+ * never a time — so this is a plain calendar-date comparison, not a
+ * temporal/window one. Returns the raw end date only when it's genuinely
+ * different from the start's own local date (same-day festivals are just
+ * a normal single day, not a range); presentation decides separately
+ * whether to actually use it (only ever when `start.timeKnown` is false —
+ * see `Event.endDate`'s doc comment).
+ */
+function resolveEndDate(startDate: string, endDate: string | undefined): string | undefined {
+  if (!endDate || !DATE_ONLY_PATTERN.test(endDate)) return undefined
+  return endDate !== startDate.slice(0, 10) ? endDate : undefined
 }
 
 export function mapJamBaseEvent(raw: JamBaseEvent): Event | null {
@@ -110,8 +138,8 @@ export function mapJamBaseEvent(raw: JamBaseEvent): Event | null {
     const timeZone = raw.location?.address?.['x-timezone']
     if (!raw.startDate || !timeZone) return null
 
-    const startUtc = toUtcInstant(raw.startDate, timeZone)
-    if (!startUtc) return null
+    const start = parseStartDate(raw.startDate, timeZone)
+    if (!start) return null
 
     const venue = mapVenue(raw.location)
     if (!venue) return null
@@ -125,9 +153,9 @@ export function mapJamBaseEvent(raw: JamBaseEvent): Event | null {
       source: { provider: 'jambase', externalId },
       name: raw.name,
       category: mapCategory(),
-      start: { utc: startUtc, timeZone },
+      start: { utc: start.utc, timeZone, timeKnown: start.timeKnown },
       end: undefined,
-      spansMultipleDays: computeSpansMultipleDays(raw.startDate, raw.endDate),
+      endDate: resolveEndDate(raw.startDate, raw.endDate),
       venue,
       url,
       image: mapImage(raw.image),

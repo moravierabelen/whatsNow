@@ -104,9 +104,10 @@ export function mapTicketmasterEvent(raw: TicketmasterEvent): Event | null {
       source: { provider: 'ticketmaster', externalId: raw.id },
       name: raw.name,
       category: mapCategory(raw.classifications),
-      start: { utc: startUtc, timeZone },
+      // Ticketmaster always gives a real dateTime with a time component —
+      // `isEligibleTicketmasterEvent` already screens out date-only/TBA events.
+      start: { utc: startUtc, timeZone, timeKnown: true },
       end: endUtc ? { utc: endUtc, timeZone } : undefined,
-      spansMultipleDays: raw.dates?.spanMultipleDays ?? false,
       venue,
       url,
       image: mapImage(raw.images),
