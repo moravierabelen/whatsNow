@@ -85,12 +85,13 @@ describe('App', () => {
     const { container } = renderApp('/')
 
     // A single event with no `end` can never classify as "happening now",
-    // so it renders as the featured event with its category label (not
-    // live). Scoped to <main> since "Music" also appears in the header's
+    // so it renders as the featured event (not live). Category shows as
+    // an icon only (see FeaturedEvent) — no textual "Music" label anymore;
+    // scoped to <main> since "Music" still appears as text in the header's
     // CategoryNav tab.
     expect(await screen.findByText('Test Concert')).toBeInTheDocument()
     const main = within(screen.getByRole('main'))
-    expect(main.getByText('Music')).toBeInTheDocument()
+    expect(main.queryByText('Music')).not.toBeInTheDocument()
     expect(main.getByText('Test Venue')).toBeInTheDocument()
     expect(main.getByText('View tickets')).toBeInTheDocument()
     // EventMap renders a `.leaflet-container` root — confirms the map is

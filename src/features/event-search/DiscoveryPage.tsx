@@ -19,23 +19,12 @@ import { useSetSearchUrlState } from './useSetSearchUrlState'
 
 const MODE_HEADLINE: Record<TimeMode, { eyebrow: string; headline: string }> = {
   now: { eyebrow: 'Live in the city', headline: "What's happening right now" },
-  tonight: { eyebrow: 'Tonight', headline: 'Plans for tonight' },
-  today: { eyebrow: 'Today', headline: 'Plans worth making time for today' },
-  tomorrow: { eyebrow: 'Tomorrow', headline: 'Get a head start on tomorrow' },
-  weekend: { eyebrow: 'This weekend', headline: 'Make the most of your weekend' },
+  tonight: { eyebrow: 'After dark', headline: 'Find somewhere worth going' },
+  today: { eyebrow: 'Not too late', headline: 'Still time to make it count' },
+  tomorrow: { eyebrow: 'Get ahead', headline: 'Find your next good plan' },
+  weekend: { eyebrow: 'No plans yet?', headline: "Good. We've got a few ideas." },
 }
 
-/**
- * The production discovery page — page composition for the established
- * `foundation` UI direction (header, temporal/category nav, featured
- * event + map, secondary listing), wired to the real search pipeline
- * (URL -> useEventSearchFromUrl -> real Ticketmaster/JamBase results).
- *
- * Deliberately not yet included (see the task that introduced this file
- * for the full list): map/list selection sync, an in-app event detail
- * page, complex filtering, a mobile map toggle/sheet — events link out to
- * their real ticketing/info page instead.
- */
 export function DiscoveryPage() {
   const { data, isPending, isError, fetchStatus, urlState } = useEventSearchFromUrl()
   const setSearchUrlState = useSetSearchUrlState()
@@ -100,10 +89,6 @@ export function DiscoveryPage() {
   const referenceTime = new Date().toISOString()
   const isNowMode = urlState.timeMode === 'now'
 
-  // "Now" must never visually imply that later-today events are happening
-  // now. `nowBuckets` (only computed in 'now' mode) drives whether the
-  // hero shows the normal map+featured treatment, or the reduced,
-  // no-markers/no-featured empty-state treatment described below.
   const nowBuckets = isNowMode ? groupByNowBucket(events, referenceTime) : null
   const showFeaturedHero =
     nowBuckets === null || nowBuckets.happeningNow.length + nowBuckets.startingSoon.length > 0
@@ -138,7 +123,11 @@ export function DiscoveryPage() {
                     className="inline-flex items-center gap-1 text-ink-muted transition-colors hover:text-ink"
                   >
                     Explore what's coming up later today
-                    <ArrowDownIcon className="h-3.5 w-3.5 shrink-0 text-accent" weight="bold" aria-hidden="true" />
+                    <ArrowDownIcon
+                      className="h-3.5 w-3.5 shrink-0 text-accent"
+                      weight="bold"
+                      aria-hidden="true"
+                    />
                   </a>
                 ) : (
                   <button
@@ -166,21 +155,14 @@ export function DiscoveryPage() {
           <div className="flex flex-col gap-14">
             {(isNowMode || featured) && (
               <section className="hero-anim-feature flex flex-col gap-3">
-                {/* Map placement: paired with the featured event as one
-                    hero block (not a persistent full-height sidebar) — the
-                    mobile map/list arrangement stays intentionally open,
-                    see DiscoveryPage's own doc comment. In 'now' mode with
-                    nothing live/soon, the map still renders (full-width,
-                    no markers) rather than disappearing — see showFeaturedHero. */}
                 <div
                   className={`hero-grid grid grid-cols-1 gap-4 lg:h-110 lg:gap-0 ${featured ? 'lg:grid-cols-[3fr_2fr]' : ''}`}
                 >
                   <div className="map-surface h-[50vh] w-full lg:h-full">
-                    {/* Markers need a real instant — an event with only a
-                        known date (no confirmed time) can't be placed on a
-                        temporal map without implying a start time we don't
-                        actually have. */}
-                    <EventMap events={showFeaturedHero ? events.filter((event) => event.start.timeKnown) : []} />
+                    <EventMap
+                      events={showFeaturedHero ? events.filter(event => event.start.timeKnown) : []}
+                      referenceTime={referenceTime}
+                    />
                   </div>
                   {featured && (
                     <div className="hero-panel">
@@ -207,13 +189,10 @@ export function DiscoveryPage() {
                         key={event.id}
                         event={event}
                         live={isEventLiveNow(event, referenceTime)}
-                        // Weekend mixes multiple days — "Today"/"Tomorrow"
-                        // framing (and a full date) don't fit the narrow
-                        // column and read inconsistently row to row; every
-                        // other mode's listing is a single implied day, so
-                        // it keeps the relative phrasing.
                         timeLabel={
-                          urlState.timeMode === 'weekend' ? formatWeekdayTime(event) : formatEventTime(event, referenceTime)
+                          urlState.timeMode === 'weekend'
+                            ? formatWeekdayTime(event)
+                            : formatEventTime(event, referenceTime)
                         }
                       />
                     ))}

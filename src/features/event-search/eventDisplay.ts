@@ -54,7 +54,10 @@ function formatDayRange(event: Pick<Event, 'start' | 'endDate'>): string | undef
  * event's own venue timezone — each `Event` already carries one.
  * `referenceTime` is explicit, never read from the system clock here, same
  * rule as the rest of this codebase (see `temporal.ts`). */
-export function formatEventTime(event: Pick<Event, 'start' | 'endDate'>, referenceTime: string): string {
+export function formatEventTime(
+  event: Pick<Event, 'start' | 'endDate'>,
+  referenceTime: string,
+): string {
   const range = formatDayRange(event)
   if (range) return range
 
@@ -89,4 +92,25 @@ export function formatWeekdayTime(event: Pick<Event, 'start' | 'endDate'>): stri
  * classification rather than re-deriving "live" from scratch. */
 export function isEventLiveNow(event: Event, referenceTime: string): boolean {
   return classifyNowBucket(event, referenceTime, event.start.timeZone) === 'happening-now'
+}
+
+/**
+ * Some providers (JamBase, notably) bake the venue into the event name
+ * itself, e.g. "Fritz Kalkbrenner at SEASEACLUB" — every renderer that
+ * shows this name also shows the venue separately right below it, so
+ * left as-is it reads as duplicated information. Strips a trailing
+ * " at <venue>" only when it names *this exact* event's own venue
+ * (case-insensitive) — never a blind "cut everything after the last
+ * ' at '", which would wrongly mangle a real artist/event name that
+ * happens to contain " at " (e.g. a band literally called "Meet Me At
+ * The Altar"). Falls back to the full name whenever the suffix doesn't
+ * match, or stripping it would leave nothing.
+ */
+export function displayEventName(event: Pick<Event, 'name' | 'venue'>): string {
+  const suffix = ` at ${event.venue.name}`
+  const { name } = event
+  if (name.length > suffix.length && name.toLowerCase().endsWith(suffix.toLowerCase())) {
+    return name.slice(0, name.length - suffix.length).trim()
+  }
+  return name
 }

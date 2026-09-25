@@ -1,5 +1,5 @@
-import { useMemo } from 'react'
-import { MapContainer, Marker, Popup, TileLayer } from 'react-leaflet'
+import { useMemo, useState } from 'react'
+import { MapContainer, Marker, TileLayer } from 'react-leaflet'
 import MarkerClusterGroup from 'react-leaflet-cluster'
 import 'leaflet/dist/leaflet.css'
 import 'react-leaflet-cluster/dist/assets/MarkerCluster.css'
@@ -8,6 +8,7 @@ import type { Coordinates, Event } from '../../domain/events/event'
 import { env } from '../../lib/env'
 import { CARTO_ATTRIBUTION, cartoTileUrl } from './cartoTiles'
 import './leafletDefaultIcon'
+import { MarkerPreviewCard } from './MarkerPreviewCard'
 
 const DEFAULT_ZOOM = 13
 
@@ -19,6 +20,8 @@ const FALLBACK_CENTER: Coordinates = { latitude: 41.3851, longitude: 2.1734 }
 
 export interface EventMapProps {
   events: Event[]
+  /** Needed to format the marker preview card's date/time — explicit, same rule as the rest of the app (see `temporal.ts`). */
+  referenceTime: string
   defaultCenter?: Coordinates
 }
 
@@ -36,9 +39,11 @@ function centroid(coordinates: Coordinates[]): Coordinates {
 
 /**
  * Self-contained event map: one marker per event (clustered), CARTO tiles.
- * Not yet wired to map/list sync, URL state, or a real event detail
- * experience — the popup is only enough to identify which event a marker
- * represents.
+ * Clicking an individual marker selects it and shows a small preview card
+ * overlaid on the map (see `MarkerPreviewCard`) — clicking a cluster still
+ * just zooms/spiderfies as normal, untouched. Not yet wired to list sync,
+ * URL state, or a real event detail experience — the preview card is only
+ * enough to identify which event a marker represents.
  *
  * `MapContainer`'s `center`/`zoom` are only the *initial* view in React
  * Leaflet — they don't re-center the map on later prop changes. Recentering
@@ -48,7 +53,10 @@ function centroid(coordinates: Coordinates[]): Coordinates {
  * must give that container an explicit height, or Leaflet renders a
  * zero-height map — a well-known Leaflet integration gotcha, not a bug here.
  */
-export function EventMap({ events, defaultCenter }: EventMapProps) {
+export function EventMap({ events, referenceTime, defaultCenter }: EventMapProps) {
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null)
+  const selectedEvent = events.find((event) => event.id === selectedEventId) ?? null
+
   const center = useMemo(() => {
     if (events.length === 0) {
       return defaultCenter ?? FALLBACK_CENTER
@@ -57,24 +65,32 @@ export function EventMap({ events, defaultCenter }: EventMapProps) {
   }, [events, defaultCenter])
 
   return (
-    <MapContainer
-      center={[center.latitude, center.longitude]}
-      zoom={DEFAULT_ZOOM}
-      style={{ height: '100%', width: '100%' }}
-    >
-      <TileLayer attribution={CARTO_ATTRIBUTION} url={cartoTileUrl(env.CARTO_API_KEY)} />
-      <MarkerClusterGroup>
-        {events.map((event) => (
-          <Marker
-            key={event.id}
-            position={[event.venue.coordinates.latitude, event.venue.coordinates.longitude]}
-            title={event.name}
-            alt={event.name}
-          >
-            <Popup>{event.name}</Popup>
-          </Marker>
-        ))}
-      </MarkerClusterGroup>
-    </MapContainer>
+    <div className="relative h-full w-full">
+      <MapContainer
+        center={[center.latitude, center.longitude]}
+        zoom={DEFAULT_ZOOM}
+        style={{ height: '100%', width: '100%' }}
+      >
+        <TileLayer attribution={CARTO_ATTRIBUTION} url={cartoTileUrl(env.CARTO_API_KEY)} />
+        <MarkerClusterGroup>
+          {events.map((event) => (
+            <Marker
+              key={event.id}
+              position={[event.venue.coordinates.latitude, event.venue.coordinates.longitude]}
+              title={event.name}
+              alt={event.name}
+              eventHandlers={{
+                click: () => setSelectedEventId((current) => (current === event.id ? null : event.id)),
+              }}
+            />
+          ))}
+        </MarkerClusterGroup>
+      </MapContainer>
+      <MarkerPreviewCard
+        event={selectedEvent}
+        referenceTime={referenceTime}
+        onClose={() => setSelectedEventId(null)}
+      />
+    </div>
   )
 }

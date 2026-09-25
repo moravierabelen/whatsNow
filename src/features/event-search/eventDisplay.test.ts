@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Event } from '../../domain/events/event'
-import { formatEventTime, formatWeekdayTime } from './eventDisplay'
+import { displayEventName, formatEventTime, formatWeekdayTime } from './eventDisplay'
 
 const MADRID = 'Europe/Madrid'
 
@@ -120,5 +120,40 @@ describe('formatEventTime', () => {
     })
 
     expect(formatEventTime(crossesMidnight, sunday)).toBe('Fri, Sep 25 · 23:00')
+  })
+})
+
+describe('displayEventName', () => {
+  function eventWithVenue(name: string, venueName: string): Pick<Event, 'name' | 'venue'> {
+    return { name, venue: { name: venueName, coordinates: { latitude: 41.38, longitude: 2.17 } } }
+  }
+
+  it('strips a trailing "at <venue>" suffix that names this event\'s own venue', () => {
+    expect(displayEventName(eventWithVenue('Fritz Kalkbrenner at SEASEACLUB', 'SEASEACLUB'))).toBe('Fritz Kalkbrenner')
+  })
+
+  it('strips the suffix case-insensitively', () => {
+    expect(displayEventName(eventWithVenue('Fritz Kalkbrenner AT seaseaclub', 'SEASEACLUB'))).toBe('Fritz Kalkbrenner')
+  })
+
+  it('leaves the name untouched when it does not end with "at <this venue>"', () => {
+    // Ticketmaster-style: no provider-appended venue suffix at all.
+    expect(displayEventName(eventWithVenue('Fritz Kalkbrenner', 'SEASEACLUB'))).toBe('Fritz Kalkbrenner')
+  })
+
+  it('leaves the name untouched when the trailing venue mention does not match this event\'s own venue', () => {
+    // Guards against over-eager stripping when the suffix names a different place.
+    expect(displayEventName(eventWithVenue('Fritz Kalkbrenner at Razzmatazz 2', 'SEASEACLUB'))).toBe(
+      'Fritz Kalkbrenner at Razzmatazz 2',
+    )
+  })
+
+  it('never mangles a real artist/event name that happens to contain " at " mid-string', () => {
+    expect(displayEventName(eventWithVenue('Meet Me At The Altar', 'SEASEACLUB'))).toBe('Meet Me At The Altar')
+  })
+
+  it('does not strip down to an empty name', () => {
+    // The whole name IS the venue mention — stripping it would leave nothing useful.
+    expect(displayEventName(eventWithVenue('at SEASEACLUB', 'SEASEACLUB'))).toBe('at SEASEACLUB')
   })
 })

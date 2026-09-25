@@ -1,4 +1,5 @@
 import type { Event } from '../../domain/events/event'
+import { displayEventName } from './eventDisplay'
 import { EventThumbnail } from './EventThumbnail'
 import { LiveDot } from './LiveDot'
 
@@ -24,7 +25,7 @@ export function HappeningNowCard({ event }: { event: Event }) {
         </span>
       </div>
       <div className="flex flex-1 flex-col gap-0.5 pt-2">
-        <h3 className="font-display text-sm font-semibold leading-snug text-ink">{event.name}</h3>
+        <h3 className="font-display text-sm font-semibold leading-snug text-ink">{displayEventName(event)}</h3>
         <p className="truncate text-xs text-ink-muted">{event.venue.name}</p>
       </div>
     </a>
