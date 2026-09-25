@@ -98,9 +98,14 @@
   .hero-grid > * {
     min-height: 0;
   }
-}
-.hero-panel .card-panel {
-  border: none;
+  /* Only here: the shared `.hero-grid` frame above already draws the
+     border, so the inner card must not draw a second, nested one. Below
+     this breakpoint there is no shared frame — the card is stacked on its
+     own and keeps its own border, or it renders as white-on-white against
+     the page and reads as having no container at all. */
+  .hero-panel .card-panel {
+    border: none;
+  }
 }
 
 .listing-row {
