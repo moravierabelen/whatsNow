@@ -6,7 +6,10 @@ import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  // `ui-exploration/` holds the original standalone design proposals kept
+  // for reference (see ui-exploration/COMPARISON.md). Nothing in `src`
+  // imports from it, so it is not linted as application code.
+  globalIgnores(['dist', 'ui-exploration']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [

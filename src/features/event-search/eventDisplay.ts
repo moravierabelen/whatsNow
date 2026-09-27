@@ -70,13 +70,6 @@ export function formatEventTime(
   return `${format(zoned, 'EEE, MMM d')} · ${timePart}`
 }
 
-/** Short weekday + time, for listings that mix multiple days (e.g.
- * Weekend) where "Today"/"Tomorrow" framing and a full date don't fit a
- * narrow column: "Fri 20:30", or "Fri · Time TBA" when the time isn't
- * known — or, for a genuinely multi-day date-only event, "Fri–Sat" (see
- * `formatDayRange`; no "Time TBA" alongside it, the range alone already
- * says enough). No `referenceTime` needed — unlike `formatEventTime`,
- * this never varies by how far away "today" is. */
 export function formatWeekdayTime(event: Pick<Event, 'start' | 'endDate'>): string {
   const range = formatDayRange(event)
   if (range) return range
