@@ -107,19 +107,22 @@ format.
 
 ## MVP scope
 
+The sections above describe the product being aimed at. The two lists
+below are the phasing for its first cut, so a capability can belong to
+the product and still be deferred here — map/list synchronization and
+event detail pages both are.
+
 - Map
 - Event markers
-- Marker/list synchronization
 - Event list
 - Basic filters
 - URL-synchronized filters
-- Event details
 - External event/ticket link
+- Multiple event providers with cross-provider deduplication
 - Loading states
 - Error states and retry
 - Empty states
 - Responsive experience
-- Basic accessibility
 - Tests for important behavior
 
 ## Out of scope for MVP
@@ -130,9 +133,11 @@ format.
 - Backend
 - Database
 - Persistent favorites
-- Multiple event providers
 - Notifications
 - Calendar integration
+- Marker/list synchronization
+- Dedicated event detail pages
+- A deliberate accessibility pass
 
 The architecture should not prevent these capabilities from being
 introduced later, but they should not drive unnecessary MVP complexity.

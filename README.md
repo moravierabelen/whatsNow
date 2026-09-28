@@ -21,6 +21,8 @@ Barcelona is the first supported city, but the application is designed to be cit
 - Support multi-day events
 - Combine data from multiple event providers
 - Deduplicate the same event across providers
+- Return every reachable result, with no "load more" step
+- Keep working, and say so, when one provider fails
 - Shareable navigation state through the URL
 - Weather context for the current city
 - Responsive desktop and mobile experience
@@ -61,6 +63,16 @@ The current MVP uses:
 | [CARTO](https://carto.com/)                                   | Map tiles       | Required   |
 
 Each event provider is isolated behind a small provider interface. This keeps provider-specific API details out of the application domain and makes it possible to add other sources later.
+
+## Results and resilience
+
+A search returns everything it can reach, and says so when it cannot reach everything.
+
+**Pagination never surfaces in the UI.** Each provider exhausts its own pages internally and hands back one complete set, using the largest page each API allows (199 for Ticketmaster, 100 for JamBase). There is no "load more" button, because a user should not have to click to discover events that already exist. Page numbers, page sizes and paging limits are provider implementation details and stay inside the provider.
+
+**Some limits belong to the API, not to us.** Ticketmaster refuses to page beyond roughly the first 1,000 matches of a search (`(page * size)` must stay under 1,000), so for a broad enough search some events are simply unreachable. Rather than presenting a partial list as complete, the result carries a `truncated` flag and the UI says there are more plans than it can show. Each provider also caps its own fetch loop, so an unexpected response can never become an unbounded request loop.
+
+**One failing source does not fail the search.** Providers are queried in parallel and settled independently: if Ticketmaster answers and JamBase does not, the Ticketmaster events are still shown, with a note that some plans may be missing. Only *every* source failing produces an error state — with a retry — because "nothing found" and "nothing answered" must not look the same to the user.
 
 ## Temporal model
 
@@ -154,7 +166,7 @@ whatsNow is currently an MVP.
 
 The current focus is on making the discovery experience reliable and useful with real event data. The project deliberately avoids adding features such as accounts, personalization, social features, or a backend database until there is a clear product reason for them.
 
-One piece of MVP scope is still in progress: **complete pagination and large-result handling**. The app currently surfaces only the first page of results from each provider, and the MVP should expose every available event rather than stopping there.
+Pagination and large-result handling are complete: a search now returns every event each provider can reach, not just its first page. See [Results and resilience](#results-and-resilience).
 
 ## What's next
 
@@ -163,6 +175,7 @@ Some areas intentionally left for later iterations:
 - Shareable event experiences / event detail pages
 - Map/list synchronization
 - Further mobile map interactions
+- Accessibility pass (keyboard navigation, focus states, announced results)
 - Server-side provider proxying
 - Additional cities
 - Additional event providers
