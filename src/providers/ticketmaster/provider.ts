@@ -1,7 +1,7 @@
 import { getCityConfig } from '../../domain/cities'
 import { resolveTimeWindow } from '../../domain/events/temporal'
 import type { Event, EventCategory } from '../../domain/events/event'
-import type { EventLocation, EventPage, EventProvider, EventSearchParams } from '../../domain/events/provider'
+import type { EventLocation, EventProvider, EventSearchParams, EventSearchResult } from '../../domain/events/provider'
 import { TicketmasterRequestError, fetchTicketmasterEventById, fetchTicketmasterEvents } from './client'
 import { isEligibleTicketmasterEvent } from './eligibility'
 import { mapTicketmasterEvent } from './mapper'
@@ -55,7 +55,48 @@ function toTicketmasterDateTime(isoInstant: string): string {
   return new Date(isoInstant).toISOString().split('.')[0] + 'Z'
 }
 
-async function searchEvents(params: EventSearchParams): Promise<EventPage> {
+/**
+ * The largest page Ticketmaster accepts: `size` of 200 or more is rejected
+ * with `DIS1036: Query param "size" must be less than 200`. Verified
+ * against the real API.
+ */
+const PAGE_SIZE = 199
+
+/**
+ * Ticketmaster refuses to page deeper than this, with
+ * `DIS1035: API Limits Exceeded: Max paging depth exceeded. (page * size)
+ * must be less than 1,000` — also verified against the real API. It is a
+ * property of the search, not of our key or plan: roughly the first 1,000
+ * matches are the only ones reachable at all, and a broader search has to
+ * be narrowed rather than paged through.
+ */
+const MAX_PAGING_DEPTH = 1000
+
+/**
+ * Page indices `0 .. MAX_PAGES - 1` are the ones `MAX_PAGING_DEPTH` allows,
+ * which doubles as the hard stop for the fetch loop below — an unexpected
+ * `totalPages` can never turn it into an unbounded request loop.
+ */
+const MAX_PAGES = Math.ceil(MAX_PAGING_DEPTH / PAGE_SIZE)
+
+function mapEligibleEvents(response: TicketmasterEventSearchResponse): Event[] {
+  return (response._embedded?.events ?? [])
+    .filter(isEligibleTicketmasterEvent)
+    .map(mapTicketmasterEvent)
+    .filter((event): event is Event => event !== null)
+}
+
+/**
+ * Fetches every page Ticketmaster will serve for this search, not just the
+ * first — the page size and the paging depth ceiling are provider details
+ * that stay in here, and callers get one complete result set.
+ *
+ * Pages are requested one after another rather than in parallel: the common
+ * case is a single page, the ceiling is `MAX_PAGES` (6), and Ticketmaster's
+ * free tier also limits requests per second, so a burst buys very little
+ * and risks being throttled.
+ */
+async function searchEvents(params: EventSearchParams): Promise<EventSearchResult> {
   const { params: locationParams, timeZone } = resolveLocationParams(params.location)
   const window = resolveTimeWindow(params.timeMode, params.referenceTime, timeZone)
 
@@ -63,7 +104,7 @@ async function searchEvents(params: EventSearchParams): Promise<EventPage> {
     ...locationParams,
     startDateTime: toTicketmasterDateTime(window.start),
     endDateTime: toTicketmasterDateTime(window.end),
-    page: String((params.page ?? 1) - 1),
+    size: String(PAGE_SIZE),
     sort: 'date,asc',
   }
 
@@ -72,17 +113,20 @@ async function searchEvents(params: EventSearchParams): Promise<EventPage> {
     query.classificationName = classificationName
   }
 
-  const response = (await fetchTicketmasterEvents(query)) as TicketmasterEventSearchResponse
+  const firstPage = (await fetchTicketmasterEvents({ ...query, page: '0' })) as TicketmasterEventSearchResponse
+  const events = mapEligibleEvents(firstPage)
 
-  const rawEvents = response._embedded?.events ?? []
-  const events = rawEvents
-    .filter(isEligibleTicketmasterEvent)
-    .map(mapTicketmasterEvent)
-    .filter((event): event is Event => event !== null)
+  // Ticketmaster reports the total up front, so the page count is known
+  // after the first request — no need to probe for an empty page.
+  const totalPages = firstPage.page.totalPages
+  const reachablePages = Math.min(totalPages, MAX_PAGES)
 
-  const hasNextPage = response.page.number + 1 < response.page.totalPages
+  for (let page = 1; page < reachablePages; page++) {
+    const response = (await fetchTicketmasterEvents({ ...query, page: String(page) })) as TicketmasterEventSearchResponse
+    events.push(...mapEligibleEvents(response))
+  }
 
-  return { events, hasNextPage }
+  return { events, truncated: totalPages > MAX_PAGES }
 }
 
 async function getEventById(externalId: string): Promise<Event | null> {

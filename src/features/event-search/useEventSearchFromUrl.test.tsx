@@ -3,7 +3,7 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { MemoryRouter, useLocation, useNavigate } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { EventPage } from '../../domain/events/provider'
+import type { AggregatedSearchResult } from '../../providers/searchEvents'
 import { searchEvents } from '../../providers/searchEvents'
 import { serializeSearchUrlState } from './searchUrlState'
 import type { SearchUrlState } from './searchUrlState'
@@ -15,7 +15,7 @@ vi.mock('../../providers/searchEvents', () => ({
 }))
 
 const mockedSearchEvents = vi.mocked(searchEvents)
-const emptyPage: EventPage = { events: [], hasNextPage: false }
+const emptyResult: AggregatedSearchResult = { events: [], truncated: false, failedProviders: [] }
 
 /**
  * Exercises `useEventSearchFromUrl` and `useSetSearchUrlState` together,
@@ -43,7 +43,7 @@ function createWrapper(initialEntries: string[]) {
 }
 
 beforeEach(() => {
-  mockedSearchEvents.mockResolvedValue(emptyPage)
+  mockedSearchEvents.mockResolvedValue(emptyResult)
 })
 
 afterEach(() => {
@@ -52,14 +52,13 @@ afterEach(() => {
 })
 
 describe('useEventSearchFromUrl — reading state', () => {
-  it('resolves an empty URL to now + Barcelona + page 1 + no categories', async () => {
+  it('resolves an empty URL to now + Barcelona + no categories', async () => {
     renderHook(() => useTestHarness(), { wrapper: createWrapper(['/']) })
 
     await waitFor(() => expect(mockedSearchEvents).toHaveBeenCalledTimes(1))
     const params = mockedSearchEvents.mock.calls[0][0]
     expect(params.timeMode).toBe('now')
     expect(params.location).toEqual({ type: 'city', citySlug: 'barcelona' })
-    expect(params.page).toBe(1)
     expect(params.categories).toBeUndefined()
   })
 
@@ -67,7 +66,7 @@ describe('useEventSearchFromUrl — reading state', () => {
     const { result } = renderHook(() => useTestHarness(), { wrapper: createWrapper(['/']) })
 
     await waitFor(() => expect(mockedSearchEvents).toHaveBeenCalledTimes(1))
-    expect(result.current.query.urlState).toEqual({ timeMode: 'now', citySlug: 'barcelona', page: 1 })
+    expect(result.current.query.urlState).toEqual({ timeMode: 'now', citySlug: 'barcelona' })
   })
 
   it('produces the same search for an explicit city=barcelona as for no city at all', async () => {
@@ -91,16 +90,9 @@ describe('useEventSearchFromUrl — reading state', () => {
     expect(mockedSearchEvents.mock.calls[0][0].categories).toEqual(['music', 'film'])
   })
 
-  it('resolves page from the URL', async () => {
-    renderHook(() => useTestHarness(), { wrapper: createWrapper(['/?page=3']) })
-
-    await waitFor(() => expect(mockedSearchEvents).toHaveBeenCalledTimes(1))
-    expect(mockedSearchEvents.mock.calls[0][0].page).toBe(3)
-  })
-
   it('resolves several params given together', async () => {
     renderHook(() => useTestHarness(), {
-      wrapper: createWrapper(['/?mode=weekend&category=music,film&city=barcelona&page=2']),
+      wrapper: createWrapper(['/?mode=weekend&category=music,film&city=barcelona']),
     })
 
     await waitFor(() => expect(mockedSearchEvents).toHaveBeenCalledTimes(1))
@@ -108,16 +100,14 @@ describe('useEventSearchFromUrl — reading state', () => {
     expect(params.timeMode).toBe('weekend')
     expect(params.categories).toEqual(['music', 'film'])
     expect(params.location).toEqual({ type: 'city', citySlug: 'barcelona' })
-    expect(params.page).toBe(2)
   })
 
   it('falls back to already-established defaults for invalid params', async () => {
-    renderHook(() => useTestHarness(), { wrapper: createWrapper(['/?mode=bogus&page=-3&category=nonsense']) })
+    renderHook(() => useTestHarness(), { wrapper: createWrapper(['/?mode=bogus&category=nonsense']) })
 
     await waitFor(() => expect(mockedSearchEvents).toHaveBeenCalledTimes(1))
     const params = mockedSearchEvents.mock.calls[0][0]
     expect(params.timeMode).toBe('now')
-    expect(params.page).toBe(1)
     expect(params.categories).toBeUndefined()
   })
 
@@ -149,7 +139,6 @@ describe('useEventSearchFromUrl + useSetSearchUrlState — writing state', () =>
       timeMode: 'weekend',
       categories: ['film', 'music'],
       citySlug: 'barcelona',
-      page: 3,
     }
 
     act(() => result.current.setSearchUrlState(nextState))
@@ -163,7 +152,7 @@ describe('useEventSearchFromUrl + useSetSearchUrlState — writing state', () =>
     const { result } = renderHook(() => useTestHarness(), { wrapper: createWrapper(['/']) })
     await waitFor(() => expect(mockedSearchEvents).toHaveBeenCalledTimes(1))
 
-    act(() => result.current.setSearchUrlState({ timeMode: 'weekend', page: 1 }))
+    act(() => result.current.setSearchUrlState({ timeMode: 'weekend' }))
 
     await waitFor(() => expect(mockedSearchEvents).toHaveBeenCalledTimes(2))
     expect(mockedSearchEvents.mock.calls[1][0].timeMode).toBe('weekend')
@@ -173,7 +162,7 @@ describe('useEventSearchFromUrl + useSetSearchUrlState — writing state', () =>
     const { result } = renderHook(() => useTestHarness(), { wrapper: createWrapper(['/']) })
     await waitFor(() => expect(mockedSearchEvents).toHaveBeenCalledTimes(1))
 
-    act(() => result.current.setSearchUrlState({ timeMode: 'now', categories: ['sports'], page: 1 }))
+    act(() => result.current.setSearchUrlState({ timeMode: 'now', categories: ['sports'] }))
 
     await waitFor(() => expect(mockedSearchEvents).toHaveBeenCalledTimes(2))
     expect(mockedSearchEvents.mock.calls[1][0].categories).toEqual(['sports'])
@@ -183,20 +172,10 @@ describe('useEventSearchFromUrl + useSetSearchUrlState — writing state', () =>
     const { result } = renderHook(() => useTestHarness(), { wrapper: createWrapper(['/']) })
     await waitFor(() => expect(mockedSearchEvents).toHaveBeenCalledTimes(1))
 
-    act(() => result.current.setSearchUrlState({ timeMode: 'now', citySlug: 'atlantis', page: 1 }))
+    act(() => result.current.setSearchUrlState({ timeMode: 'now', citySlug: 'atlantis' }))
 
     await waitFor(() => expect(result.current.query.fetchStatus).toBe('idle'))
     expect(mockedSearchEvents).toHaveBeenCalledTimes(1)
-  })
-
-  it('changing page changes the search identity', async () => {
-    const { result } = renderHook(() => useTestHarness(), { wrapper: createWrapper(['/']) })
-    await waitFor(() => expect(mockedSearchEvents).toHaveBeenCalledTimes(1))
-
-    act(() => result.current.setSearchUrlState({ timeMode: 'now', page: 2 }))
-
-    await waitFor(() => expect(mockedSearchEvents).toHaveBeenCalledTimes(2))
-    expect(mockedSearchEvents.mock.calls[1][0].page).toBe(2)
   })
 
   it('returning to a previous URL restores its corresponding search', async () => {
@@ -204,7 +183,7 @@ describe('useEventSearchFromUrl + useSetSearchUrlState — writing state', () =>
     await waitFor(() => expect(mockedSearchEvents).toHaveBeenCalledTimes(1))
     expect(mockedSearchEvents.mock.calls[0][0].timeMode).toBe('today')
 
-    act(() => result.current.setSearchUrlState({ timeMode: 'weekend', page: 1 }))
+    act(() => result.current.setSearchUrlState({ timeMode: 'weekend' }))
     await waitFor(() => expect(mockedSearchEvents).toHaveBeenCalledTimes(2))
     expect(mockedSearchEvents.mock.calls[1][0].timeMode).toBe('weekend')
 

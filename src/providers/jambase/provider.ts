@@ -2,12 +2,27 @@ import { TZDate } from '@date-fns/tz'
 import { getCityConfig } from '../../domain/cities'
 import { eventOverlapsWindow, resolveTimeWindow } from '../../domain/events/temporal'
 import type { Event } from '../../domain/events/event'
-import type { EventLocation, EventPage, EventProvider, EventSearchParams } from '../../domain/events/provider'
+import type { EventLocation, EventProvider, EventSearchParams, EventSearchResult } from '../../domain/events/provider'
 import { JamBaseRequestError, fetchJamBaseEventById, fetchJamBaseEvents } from './client'
 import { mapJamBaseEvent } from './mapper'
 import type { JamBaseEventDetailResponse, JamBaseEventSearchResponse } from './types'
 
-const DEFAULT_PER_PAGE = 20
+/**
+ * JamBase's documented maximum: `perPage` above 100 is rejected with
+ * "The perPage value `200` is not valid. Please use a number between 1 and
+ * 100." Verified against the real API.
+ */
+const PAGE_SIZE = 100
+
+/**
+ * Hard stop for the fetch loop, so an unexpected `totalPages` can never
+ * turn it into an unbounded request loop. JamBase publishes no paging depth
+ * limit of its own, and this is deliberately far above real demand: the
+ * widest time mode is a weekend (~2.5 days), where even a dense city sits
+ * in the low hundreds of events. Reaching this cap means the result is
+ * knowingly incomplete, so it reports `truncated`.
+ */
+const MAX_PAGES = 20
 
 /**
  * JamBase's query vocabulary is coordinates + radius (there is no working
@@ -74,9 +89,37 @@ function resolveDateRange(
   return { eventDateFrom, eventDateTo: windowEndDate }
 }
 
-async function searchEvents(params: EventSearchParams): Promise<EventPage> {
+/**
+ * JamBase only filters by date, not time, so the exact domain window must be
+ * re-applied to the mapped candidates — this is what actually narrows e.g.
+ * Tonight down from "the two calendar days involved" to "18:00 -> 06:00".
+ * It runs per page, which means a page of 100 raw events can legitimately
+ * yield far fewer domain events.
+ */
+function mapEventsInWindow(
+  response: JamBaseEventSearchResponse,
+  window: { start: string; end: string },
+): Event[] {
+  return (response.events ?? [])
+    .map(mapJamBaseEvent)
+    .filter((event): event is Event => event !== null)
+    .filter((event) => eventOverlapsWindow(event, window))
+}
+
+/**
+ * Fetches every page JamBase will serve for this search, not just the first
+ * — the page size and page bookkeeping are provider details that stay in
+ * here, and callers get one complete result set.
+ *
+ * The loop is driven by the `totalPages` of the *first* response, never by
+ * the `pagination` echoed back on later pages: asking JamBase for a page
+ * past the end does not error, it returns `{page: 0, totalItems: 0,
+ * totalPages: 0}` (verified against the real API), so trusting that would
+ * corrupt the loop's own bounds mid-flight.
+ */
+async function searchEvents(params: EventSearchParams): Promise<EventSearchResult> {
   if (params.categories && !params.categories.includes('music')) {
-    return { events: [], hasNextPage: false }
+    return { events: [], truncated: false }
   }
 
   const { params: locationParams, timeZone } = resolveLocationParams(params.location)
@@ -87,25 +130,22 @@ async function searchEvents(params: EventSearchParams): Promise<EventPage> {
     ...locationParams,
     eventDateFrom,
     eventDateTo,
-    page: String(params.page ?? 1),
-    perPage: String(DEFAULT_PER_PAGE),
+    perPage: String(PAGE_SIZE),
   }
 
-  const response = (await fetchJamBaseEvents(query)) as JamBaseEventSearchResponse
+  const firstPage = (await fetchJamBaseEvents({ ...query, page: '1' })) as JamBaseEventSearchResponse
+  const events = mapEventsInWindow(firstPage, window)
 
-  const rawEvents = response.events ?? []
-  const events = rawEvents
-    .map(mapJamBaseEvent)
-    .filter((event): event is Event => event !== null)
-    // JamBase only filters by date, not time, so the exact domain window
-    // must be re-applied to the mapped candidates — this is what actually
-    // narrows e.g. Tonight down from "the two calendar days involved" to
-    // "18:00 -> 06:00".
-    .filter((event) => eventOverlapsWindow(event, window))
+  const totalPages = firstPage.pagination.totalPages
+  const reachablePages = Math.min(totalPages, MAX_PAGES)
 
-  const hasNextPage = response.pagination.page < response.pagination.totalPages
+  // JamBase pages are 1-based, so the first response already covered page 1.
+  for (let page = 2; page <= reachablePages; page++) {
+    const response = (await fetchJamBaseEvents({ ...query, page: String(page) })) as JamBaseEventSearchResponse
+    events.push(...mapEventsInWindow(response, window))
+  }
 
-  return { events, hasNextPage }
+  return { events, truncated: totalPages > MAX_PAGES }
 }
 
 async function getEventById(externalId: string): Promise<Event | null> {

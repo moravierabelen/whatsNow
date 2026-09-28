@@ -5,13 +5,13 @@ import { toEventSearchParams } from './toEventSearchParams'
 const REFERENCE_TIME = '2026-09-19T13:00:00Z'
 
 function state(overrides: Partial<SearchUrlState> = {}): SearchUrlState {
-  return { timeMode: 'today', citySlug: 'barcelona', page: 1, ...overrides }
+  return { timeMode: 'today', citySlug: 'barcelona', ...overrides }
 }
 
 describe('toEventSearchParams', () => {
   it('transforms a complete state into exactly the expected EventSearchParams shape', () => {
     const result = toEventSearchParams(
-      state({ timeMode: 'weekend', categories: ['music', 'film'], citySlug: 'barcelona', page: 3 }),
+      state({ timeMode: 'weekend', categories: ['music', 'film'], citySlug: 'barcelona' }),
       REFERENCE_TIME,
     )
 
@@ -20,7 +20,6 @@ describe('toEventSearchParams', () => {
       referenceTime: REFERENCE_TIME,
       location: { type: 'city', citySlug: 'barcelona' },
       categories: ['music', 'film'],
-      page: 3,
     })
   })
 
@@ -49,12 +48,6 @@ describe('toEventSearchParams', () => {
     const result = toEventSearchParams(state({ citySlug: 'barcelona' }), REFERENCE_TIME)
 
     expect(result?.location).toEqual({ type: 'city', citySlug: 'barcelona' })
-  })
-
-  it('preserves page', () => {
-    const result = toEventSearchParams(state({ page: 5 }), REFERENCE_TIME)
-
-    expect(result?.page).toBe(5)
   })
 
   it('transforms timeMode "tonight" like any other mode, now that EventSearchParams represents it natively', () => {

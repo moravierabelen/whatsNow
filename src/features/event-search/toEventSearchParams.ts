@@ -18,7 +18,7 @@ import type { SearchUrlState } from './searchUrlState'
  * policy this function has no business owning.
  */
 export function toEventSearchParams(state: SearchUrlState, referenceTime: string): EventSearchParams | null {
-  const { timeMode, citySlug, categories, page } = state
+  const { timeMode, citySlug, categories } = state
 
   if (!citySlug || !getCityConfig(citySlug)) {
     return null
@@ -29,6 +29,5 @@ export function toEventSearchParams(state: SearchUrlState, referenceTime: string
     referenceTime,
     location: { type: 'city', citySlug },
     categories,
-    page,
   }
 }

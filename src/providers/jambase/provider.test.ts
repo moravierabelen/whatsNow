@@ -158,40 +158,139 @@ describe('jamBaseProvider.searchEvents — temporal window', () => {
 })
 
 describe('jamBaseProvider.searchEvents — pagination', () => {
-  it('passes the domain page directly, without translating it', async () => {
+  // Inside the default `today` window (2026-09-15 local), so these events
+  // survive the provider's own re-application of the domain time window.
+  const IN_WINDOW_START = '2026-09-15T20:00:00'
+
+  /** A page whose metadata claims `totalPages`, carrying `count` in-window events. */
+  function pageOf(count: number, totalPages: number, page: number): JamBaseEventSearchResponse {
+    return searchResponse({
+      pagination: { page, perPage: 100, totalItems: totalPages * 100, totalPages, nextPage: null, previousPage: null },
+      events: Array.from({ length: count }, (_, i) =>
+        rawEvent({ identifier: `jambase:${page}${i}`, startDate: IN_WINDOW_START }),
+      ),
+    })
+  }
+
+  it('requests the largest page size JamBase accepts', async () => {
     mockedFetchEvents.mockResolvedValue(searchResponse())
 
-    await jamBaseProvider.searchEvents(searchParams({ page: 3 }))
+    await jamBaseProvider.searchEvents(searchParams())
 
-    expect(mockedFetchEvents.mock.calls[0][0].page).toBe('3')
+    // perPage above 100 is rejected by the API.
+    expect(mockedFetchEvents.mock.calls[0][0].perPage).toBe('100')
   })
 
-  it('defaults to page 1 when page is omitted', async () => {
+  it('starts from JamBase page 1', async () => {
     mockedFetchEvents.mockResolvedValue(searchResponse())
 
-    await jamBaseProvider.searchEvents(searchParams({ page: undefined }))
+    await jamBaseProvider.searchEvents(searchParams())
 
     expect(mockedFetchEvents.mock.calls[0][0].page).toBe('1')
   })
 
-  it('computes hasNextPage from JamBase pagination metadata', async () => {
-    mockedFetchEvents.mockResolvedValue(
-      searchResponse({ pagination: { page: 1, perPage: 20, totalItems: 41, totalPages: 3, nextPage: 'x', previousPage: null } }),
-    )
+  it('makes a single request when the first page is the only one', async () => {
+    mockedFetchEvents.mockResolvedValue(pageOf(2, 1, 1))
 
     const result = await jamBaseProvider.searchEvents(searchParams())
 
-    expect(result.hasNextPage).toBe(true)
+    expect(mockedFetchEvents).toHaveBeenCalledTimes(1)
+    expect(result.events).toHaveLength(2)
+    expect(result.truncated).toBe(false)
   })
 
-  it('reports hasNextPage as false on the last page', async () => {
-    mockedFetchEvents.mockResolvedValue(
-      searchResponse({ pagination: { page: 3, perPage: 20, totalItems: 41, totalPages: 3, nextPage: null, previousPage: 'x' } }),
-    )
+  it('fetches every page reported by the first response and returns the combined set', async () => {
+    mockedFetchEvents
+      .mockResolvedValueOnce(pageOf(2, 3, 1))
+      .mockResolvedValueOnce(pageOf(2, 3, 2))
+      .mockResolvedValueOnce(pageOf(1, 3, 3))
 
     const result = await jamBaseProvider.searchEvents(searchParams())
 
-    expect(result.hasNextPage).toBe(false)
+    expect(mockedFetchEvents).toHaveBeenCalledTimes(3)
+    expect(mockedFetchEvents.mock.calls.map((call) => call[0].page)).toEqual(['1', '2', '3'])
+    expect(result.events).toHaveLength(5)
+    expect(result.truncated).toBe(false)
+  })
+
+  it('ignores the pagination echoed by later pages, which JamBase zeroes out past the end', async () => {
+    // Asking JamBase for a page past the end returns totalPages: 0 instead of
+    // erroring, so only the first response may drive the loop bounds.
+    mockedFetchEvents
+      .mockResolvedValueOnce(pageOf(1, 3, 1))
+      .mockResolvedValueOnce(
+        searchResponse({
+          pagination: { page: 0, perPage: 100, totalItems: 0, totalPages: 0, nextPage: null, previousPage: null },
+          events: [rawEvent({ identifier: 'jambase:second', startDate: IN_WINDOW_START })],
+        }),
+      )
+      .mockResolvedValueOnce(pageOf(1, 3, 3))
+
+    const result = await jamBaseProvider.searchEvents(searchParams())
+
+    expect(mockedFetchEvents).toHaveBeenCalledTimes(3)
+    expect(result.events).toHaveLength(3)
+  })
+
+  it('keeps every page on the same query apart from the page number', async () => {
+    mockedFetchEvents.mockResolvedValueOnce(pageOf(1, 2, 1)).mockResolvedValueOnce(pageOf(1, 2, 2))
+
+    await jamBaseProvider.searchEvents(searchParams())
+
+    const [{ page: firstPage, ...firstQuery }, { page: secondPage, ...secondQuery }] =
+      mockedFetchEvents.mock.calls.map((call) => call[0])
+    expect(firstQuery).toEqual(secondQuery)
+    expect([firstPage, secondPage]).toEqual(['1', '2'])
+  })
+
+  it('stops at the safety limit and reports the result as truncated', async () => {
+    mockedFetchEvents.mockResolvedValue(pageOf(1, 500, 1))
+
+    const result = await jamBaseProvider.searchEvents(searchParams())
+
+    expect(mockedFetchEvents).toHaveBeenCalledTimes(20)
+    expect(result.truncated).toBe(true)
+  })
+
+  it('does not request further pages when the first response reports none', async () => {
+    mockedFetchEvents.mockResolvedValue(searchResponse())
+
+    const result = await jamBaseProvider.searchEvents(searchParams())
+
+    expect(mockedFetchEvents).toHaveBeenCalledTimes(1)
+    expect(result).toEqual({ events: [], truncated: false })
+  })
+
+  it('re-applies the domain time window to every page, not just the first', async () => {
+    // 'today' is 2026-09-15 local; this event is days later, so it must be
+    // dropped even though JamBase returned it on a later page.
+    const outOfWindow = rawEvent({ identifier: 'jambase:out', startDate: '2026-09-19T16:30:00' })
+    mockedFetchEvents
+      .mockResolvedValueOnce(
+        searchResponse({
+          pagination: { page: 1, perPage: 100, totalItems: 200, totalPages: 2, nextPage: null, previousPage: null },
+          events: [rawEvent({ identifier: 'jambase:in', startDate: '2026-09-15T20:00:00' })],
+        }),
+      )
+      .mockResolvedValueOnce(
+        searchResponse({
+          pagination: { page: 2, perPage: 100, totalItems: 200, totalPages: 2, nextPage: null, previousPage: null },
+          events: [outOfWindow],
+        }),
+      )
+
+    const result = await jamBaseProvider.searchEvents(searchParams({ timeMode: 'today' }))
+
+    expect(mockedFetchEvents).toHaveBeenCalledTimes(2)
+    expect(result.events).toHaveLength(1)
+  })
+
+  it('propagates a failure on a later page rather than returning a partial set', async () => {
+    mockedFetchEvents
+      .mockResolvedValueOnce(pageOf(1, 3, 1))
+      .mockRejectedValueOnce(new JamBaseRequestError('boom', 500))
+
+    await expect(jamBaseProvider.searchEvents(searchParams())).rejects.toBeInstanceOf(JamBaseRequestError)
   })
 })
 
@@ -199,7 +298,7 @@ describe('jamBaseProvider.searchEvents — categories', () => {
   it('skips the request entirely when categories are given and none is music', async () => {
     const result = await jamBaseProvider.searchEvents(searchParams({ categories: ['sports', 'film'] }))
 
-    expect(result).toEqual({ events: [], hasNextPage: false })
+    expect(result).toEqual({ events: [], truncated: false })
     expect(mockedFetchEvents).not.toHaveBeenCalled()
   })
 

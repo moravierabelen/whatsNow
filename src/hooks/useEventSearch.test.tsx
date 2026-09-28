@@ -2,7 +2,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { renderHook, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { EventPage, EventLocation, EventSearchParams } from '../domain/events/provider'
+import type { EventLocation, EventSearchParams } from '../domain/events/provider'
+import type { AggregatedSearchResult } from '../providers/searchEvents'
 import { searchEvents } from '../providers/searchEvents'
 import { eventSearchQueryKey, useEventSearch } from './useEventSearch'
 
@@ -29,7 +30,7 @@ function params(overrides: Partial<EventSearchParams> = {}): EventSearchParams {
   return { timeMode: 'today', referenceTime: '2026-09-19T13:00:00Z', location: BARCELONA, ...overrides }
 }
 
-const emptyPage: EventPage = { events: [], hasNextPage: false }
+const emptyResult: AggregatedSearchResult = { events: [], truncated: false, failedProviders: [] }
 
 afterEach(() => {
   vi.clearAllMocks()
@@ -37,7 +38,7 @@ afterEach(() => {
 
 describe('eventSearchQueryKey', () => {
   it('builds a stable key from all relevant params', () => {
-    const key = eventSearchQueryKey(params({ categories: ['music'], page: 2 }))
+    const key = eventSearchQueryKey(params({ categories: ['music'] }))
 
     expect(key).toEqual([
       'events',
@@ -46,7 +47,6 @@ describe('eventSearchQueryKey', () => {
         referenceTime: '2026-09-19T13:00:00Z',
         location: BARCELONA,
         categories: ['music'],
-        page: 2,
       },
     ])
   })
@@ -87,19 +87,12 @@ describe('eventSearchQueryKey', () => {
 
     expect(keyA).not.toEqual(keyB)
   })
-
-  it('changes when page changes', () => {
-    const keyA = eventSearchQueryKey(params({ page: 1 }))
-    const keyB = eventSearchQueryKey(params({ page: 2 }))
-
-    expect(keyA).not.toEqual(keyB)
-  })
 })
 
 describe('useEventSearch', () => {
   it('calls searchEvents with the exact same params', async () => {
-    mockedSearchEvents.mockResolvedValue(emptyPage)
-    const searchParams = params({ categories: ['music'], page: 2 })
+    mockedSearchEvents.mockResolvedValue(emptyResult)
+    const searchParams = params({ categories: ['music'] })
 
     renderHook(() => useEventSearch(searchParams), { wrapper: createWrapper() })
 
@@ -116,13 +109,13 @@ describe('useEventSearch', () => {
   })
 
   it('exposes data from TanStack Query once the search resolves', async () => {
-    const page: EventPage = { events: [], hasNextPage: true }
-    mockedSearchEvents.mockResolvedValue(page)
+    const searchResult: AggregatedSearchResult = { events: [], truncated: true, failedProviders: [] }
+    mockedSearchEvents.mockResolvedValue(searchResult)
 
     const { result } = renderHook(() => useEventSearch(params()), { wrapper: createWrapper() })
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
-    expect(result.current.data).toEqual(page)
+    expect(result.current.data).toEqual(searchResult)
   })
 
   it('exposes an error state when searchEvents rejects', async () => {

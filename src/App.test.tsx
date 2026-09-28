@@ -4,7 +4,7 @@ import { MemoryRouter, useLocation } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import type { Event } from './domain/events/event'
-import type { EventPage } from './domain/events/provider'
+import type { AggregatedSearchResult } from './providers/searchEvents'
 import { searchEvents } from './providers/searchEvents'
 
 vi.mock('./providers/searchEvents', () => ({
@@ -49,7 +49,7 @@ afterEach(() => {
 
 describe('App', () => {
   it('renders the main landmark', async () => {
-    mockedSearchEvents.mockResolvedValue({ events: [], hasNextPage: false })
+    mockedSearchEvents.mockResolvedValue({ events: [], truncated: false, failedProviders: [] })
 
     renderApp('/')
 
@@ -58,7 +58,7 @@ describe('App', () => {
   })
 
   it('starts a search on / using the established defaults', async () => {
-    mockedSearchEvents.mockResolvedValue({ events: [], hasNextPage: false })
+    mockedSearchEvents.mockResolvedValue({ events: [], truncated: false, failedProviders: [] })
 
     renderApp('/')
 
@@ -66,7 +66,6 @@ describe('App', () => {
     const params = mockedSearchEvents.mock.calls[0][0]
     expect(params.timeMode).toBe('now')
     expect(params.location).toEqual({ type: 'city', citySlug: 'barcelona' })
-    expect(params.page).toBe(1)
     expect(params.categories).toBeUndefined()
   })
 
@@ -79,8 +78,8 @@ describe('App', () => {
   })
 
   it('shows the resulting events once the search resolves', async () => {
-    const page: EventPage = { events: [SAMPLE_EVENT], hasNextPage: false }
-    mockedSearchEvents.mockResolvedValue(page)
+    const searchResult: AggregatedSearchResult = { events: [SAMPLE_EVENT], truncated: false, failedProviders: [] }
+    mockedSearchEvents.mockResolvedValue(searchResult)
 
     const { container } = renderApp('/')
 
@@ -100,7 +99,7 @@ describe('App', () => {
   })
 
   it('does not render the map when the search resolves with no events (non-now mode)', async () => {
-    mockedSearchEvents.mockResolvedValue({ events: [], hasNextPage: false })
+    mockedSearchEvents.mockResolvedValue({ events: [], truncated: false, failedProviders: [] })
 
     // 'now' mode has its own dedicated empty treatment (see the "now mode"
     // tests below) — this covers the generic EmptyState still used by
@@ -112,7 +111,7 @@ describe('App', () => {
   })
 
   it('shows an explicit empty state when the search resolves with no events (non-now mode)', async () => {
-    mockedSearchEvents.mockResolvedValue({ events: [], hasNextPage: false })
+    mockedSearchEvents.mockResolvedValue({ events: [], truncated: false, failedProviders: [] })
 
     renderApp('/?mode=today')
 
@@ -121,8 +120,8 @@ describe('App', () => {
 
   describe('now mode empty states', () => {
     it('shows the normal featured/map hero when there are live-or-soon events', async () => {
-      const page: EventPage = { events: [SAMPLE_EVENT], hasNextPage: false }
-      mockedSearchEvents.mockResolvedValue(page)
+      const searchResult: AggregatedSearchResult = { events: [SAMPLE_EVENT], truncated: false, failedProviders: [] }
+      mockedSearchEvents.mockResolvedValue(searchResult)
 
       const { container } = renderApp('/')
 
@@ -137,7 +136,7 @@ describe('App', () => {
         // Well past the 180min "starting soon" window, same local day.
         start: { utc: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString(), timeZone: 'Europe/Madrid', timeKnown: true },
       }
-      mockedSearchEvents.mockResolvedValue({ events: [laterToday], hasNextPage: false })
+      mockedSearchEvents.mockResolvedValue({ events: [laterToday], truncated: false, failedProviders: [] })
 
       const { container } = renderApp('/')
 
@@ -151,7 +150,7 @@ describe('App', () => {
     })
 
     it('shows the nothing-today empty state and switches timeMode to tomorrow on click', async () => {
-      mockedSearchEvents.mockResolvedValue({ events: [], hasNextPage: false })
+      mockedSearchEvents.mockResolvedValue({ events: [], truncated: false, failedProviders: [] })
 
       renderApp('/')
 
@@ -174,8 +173,67 @@ describe('App', () => {
     expect(await screen.findByText('Could not load events.')).toBeInTheDocument()
   })
 
+  it('retries the search from the error state and recovers', async () => {
+    mockedSearchEvents.mockRejectedValueOnce(new Error('boom'))
+    mockedSearchEvents.mockResolvedValue({ events: [SAMPLE_EVENT], truncated: false, failedProviders: [] })
+
+    renderApp('/')
+
+    const retry = await screen.findByRole('button', { name: 'Try again' })
+    fireEvent.click(retry)
+
+    expect(await screen.findByText('Test Concert')).toBeInTheDocument()
+    expect(screen.queryByText('Could not load events.')).not.toBeInTheDocument()
+  })
+
+  it('says so when a source failed, instead of passing a short list off as complete', async () => {
+    mockedSearchEvents.mockResolvedValue({
+      events: [SAMPLE_EVENT],
+      truncated: false,
+      failedProviders: ['jambase'],
+    })
+
+    renderApp('/')
+
+    expect(
+      await screen.findByText('One of our sources is not responding, so some plans may be missing.'),
+    ).toBeInTheDocument()
+  })
+
+  it('discloses a failed source even when the surviving one returned nothing', async () => {
+    // Otherwise an outage is indistinguishable from a genuinely quiet city.
+    mockedSearchEvents.mockResolvedValue({ events: [], truncated: false, failedProviders: ['ticketmaster'] })
+
+    renderApp('/?mode=today')
+
+    expect(await screen.findByText('Nothing quite like that, yet')).toBeInTheDocument()
+    expect(
+      screen.getByText('One of our sources is not responding, so some plans may be missing.'),
+    ).toBeInTheDocument()
+  })
+
+  it('says so when there are more results than can be reached', async () => {
+    mockedSearchEvents.mockResolvedValue({ events: [SAMPLE_EVENT], truncated: true, failedProviders: [] })
+
+    renderApp('/')
+
+    expect(
+      await screen.findByText('There are more plans than we can show here — try narrowing by category.'),
+    ).toBeInTheDocument()
+  })
+
+  it('shows no such notice when the result is complete', async () => {
+    mockedSearchEvents.mockResolvedValue({ events: [SAMPLE_EVENT], truncated: false, failedProviders: [] })
+
+    renderApp('/')
+
+    expect(await screen.findByText('Test Concert')).toBeInTheDocument()
+    expect(screen.queryByText(/not responding/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/more plans than we can show/)).not.toBeInTheDocument()
+  })
+
   it('passes mode=tonight through to the search', async () => {
-    mockedSearchEvents.mockResolvedValue({ events: [], hasNextPage: false })
+    mockedSearchEvents.mockResolvedValue({ events: [], truncated: false, failedProviders: [] })
 
     renderApp('/?mode=tonight')
 
@@ -184,7 +242,7 @@ describe('App', () => {
   })
 
   it('works with an explicit city=barcelona', async () => {
-    mockedSearchEvents.mockResolvedValue({ events: [], hasNextPage: false })
+    mockedSearchEvents.mockResolvedValue({ events: [], truncated: false, failedProviders: [] })
 
     renderApp('/?city=barcelona')
 
@@ -193,7 +251,7 @@ describe('App', () => {
   })
 
   it('does not execute a search for an unknown city', async () => {
-    mockedSearchEvents.mockResolvedValue({ events: [], hasNextPage: false })
+    mockedSearchEvents.mockResolvedValue({ events: [], truncated: false, failedProviders: [] })
 
     renderApp('/?city=atlantis')
 
@@ -208,7 +266,7 @@ describe('App', () => {
   })
 
   it('does not rewrite / to include city=barcelona', async () => {
-    mockedSearchEvents.mockResolvedValue({ events: [], hasNextPage: false })
+    mockedSearchEvents.mockResolvedValue({ events: [], truncated: false, failedProviders: [] })
 
     renderApp('/')
 

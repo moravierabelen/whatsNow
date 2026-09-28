@@ -44,8 +44,8 @@ afterEach(() => {
 
 describe('searchEvents (aggregator)', () => {
   it('combines results from both providers', async () => {
-    mockedTicketmasterSearch.mockResolvedValue({ events: [event('tm-1', 'ticketmaster')], hasNextPage: false })
-    mockedJamBaseSearch.mockResolvedValue({ events: [event('jb-1', 'jambase')], hasNextPage: false })
+    mockedTicketmasterSearch.mockResolvedValue({ events: [event('tm-1', 'ticketmaster')], truncated: false })
+    mockedJamBaseSearch.mockResolvedValue({ events: [event('jb-1', 'jambase')], truncated: false })
 
     const result = await searchEvents(params())
 
@@ -56,11 +56,11 @@ describe('searchEvents (aggregator)', () => {
   it('preserves Ticketmaster-then-JamBase order, and each provider\'s own internal order', async () => {
     mockedTicketmasterSearch.mockResolvedValue({
       events: [event('tm-2', 'ticketmaster'), event('tm-1', 'ticketmaster')],
-      hasNextPage: false,
+      truncated: false,
     })
     mockedJamBaseSearch.mockResolvedValue({
       events: [event('jb-2', 'jambase'), event('jb-1', 'jambase')],
-      hasNextPage: false,
+      truncated: false,
     })
 
     const result = await searchEvents(params())
@@ -73,20 +73,20 @@ describe('searchEvents (aggregator)', () => {
     [true, false, true],
     [false, true, true],
     [true, true, true],
-  ])('combines hasNextPage as OR (ticketmaster=%s, jambase=%s -> %s)', async (tmHasNext, jbHasNext, expected) => {
-    mockedTicketmasterSearch.mockResolvedValue({ events: [], hasNextPage: tmHasNext })
-    mockedJamBaseSearch.mockResolvedValue({ events: [], hasNextPage: jbHasNext })
+  ])('combines truncated as OR (ticketmaster=%s, jambase=%s -> %s)', async (tmTruncated, jbTruncated, expected) => {
+    mockedTicketmasterSearch.mockResolvedValue({ events: [], truncated: tmTruncated })
+    mockedJamBaseSearch.mockResolvedValue({ events: [], truncated: jbTruncated })
 
     const result = await searchEvents(params())
 
-    expect(result.hasNextPage).toBe(expected)
+    expect(result.truncated).toBe(expected)
   })
 
   it('passes the exact same params to both providers', async () => {
-    mockedTicketmasterSearch.mockResolvedValue({ events: [], hasNextPage: false })
-    mockedJamBaseSearch.mockResolvedValue({ events: [], hasNextPage: false })
+    mockedTicketmasterSearch.mockResolvedValue({ events: [], truncated: false })
+    mockedJamBaseSearch.mockResolvedValue({ events: [], truncated: false })
 
-    const searchParams = params({ page: 2, categories: ['music'] })
+    const searchParams = params({ categories: ['music'] })
     await searchEvents(searchParams)
 
     expect(mockedTicketmasterSearch).toHaveBeenCalledWith(searchParams)
@@ -94,8 +94,8 @@ describe('searchEvents (aggregator)', () => {
   })
 
   it('works correctly when one provider returns zero events', async () => {
-    mockedTicketmasterSearch.mockResolvedValue({ events: [event('tm-1', 'ticketmaster')], hasNextPage: false })
-    mockedJamBaseSearch.mockResolvedValue({ events: [], hasNextPage: false })
+    mockedTicketmasterSearch.mockResolvedValue({ events: [event('tm-1', 'ticketmaster')], truncated: false })
+    mockedJamBaseSearch.mockResolvedValue({ events: [], truncated: false })
 
     const result = await searchEvents(params())
 
@@ -103,18 +103,49 @@ describe('searchEvents (aggregator)', () => {
     expect(result.events[0].id).toBe('tm-1')
   })
 
-  it('propagates the error if Ticketmaster fails', async () => {
+  it('still returns JamBase results when Ticketmaster fails, and names the failed source', async () => {
     mockedTicketmasterSearch.mockRejectedValue(new Error('ticketmaster boom'))
-    mockedJamBaseSearch.mockResolvedValue({ events: [], hasNextPage: false })
+    mockedJamBaseSearch.mockResolvedValue({ events: [event('jb-1', 'jambase')], truncated: false })
+
+    const result = await searchEvents(params())
+
+    expect(result.events.map((e) => e.id)).toEqual(['jb-1'])
+    expect(result.failedProviders).toEqual(['ticketmaster'])
+  })
+
+  it('still returns Ticketmaster results when JamBase fails, and names the failed source', async () => {
+    mockedTicketmasterSearch.mockResolvedValue({ events: [event('tm-1', 'ticketmaster')], truncated: false })
+    mockedJamBaseSearch.mockRejectedValue(new Error('jambase boom'))
+
+    const result = await searchEvents(params())
+
+    expect(result.events.map((e) => e.id)).toEqual(['tm-1'])
+    expect(result.failedProviders).toEqual(['jambase'])
+  })
+
+  it('reports no failed providers when both answer', async () => {
+    mockedTicketmasterSearch.mockResolvedValue({ events: [], truncated: false })
+    mockedJamBaseSearch.mockResolvedValue({ events: [], truncated: false })
+
+    const result = await searchEvents(params())
+
+    expect(result.failedProviders).toEqual([])
+  })
+
+  it('throws when every provider fails, so an outage never looks like an empty city', async () => {
+    mockedTicketmasterSearch.mockRejectedValue(new Error('ticketmaster boom'))
+    mockedJamBaseSearch.mockRejectedValue(new Error('jambase boom'))
 
     await expect(searchEvents(params())).rejects.toThrow('ticketmaster boom')
   })
 
-  it('propagates the error if JamBase fails', async () => {
-    mockedTicketmasterSearch.mockResolvedValue({ events: [], hasNextPage: false })
-    mockedJamBaseSearch.mockRejectedValue(new Error('jambase boom'))
+  it('still reports truncation from the provider that did answer', async () => {
+    mockedTicketmasterSearch.mockRejectedValue(new Error('ticketmaster boom'))
+    mockedJamBaseSearch.mockResolvedValue({ events: [], truncated: true })
 
-    await expect(searchEvents(params())).rejects.toThrow('jambase boom')
+    const result = await searchEvents(params())
+
+    expect(result.truncated).toBe(true)
   })
 
   it('deduplicates a genuine cross-provider duplicate (same time/venue, matching name) into one event', async () => {
@@ -123,8 +154,8 @@ describe('searchEvents (aggregator)', () => {
     // applies it, not the old "never merge" behavior.
     const tmEvent = { ...event('tm-1', 'ticketmaster'), name: 'Only The Poets - AND I’D DO IT AGAIN' }
     const jbEvent = { ...event('jb-1', 'jambase'), name: 'Only The Poets at Venue' }
-    mockedTicketmasterSearch.mockResolvedValue({ events: [tmEvent], hasNextPage: false })
-    mockedJamBaseSearch.mockResolvedValue({ events: [jbEvent], hasNextPage: false })
+    mockedTicketmasterSearch.mockResolvedValue({ events: [tmEvent], truncated: false })
+    mockedJamBaseSearch.mockResolvedValue({ events: [jbEvent], truncated: false })
 
     const result = await searchEvents(params())
 
@@ -134,8 +165,8 @@ describe('searchEvents (aggregator)', () => {
   it('does not deduplicate events with different ids when they represent clearly different plans', async () => {
     const tmEvent = { ...event('tm-1', 'ticketmaster'), name: 'Totally Unrelated Thing' }
     const jbEvent = { ...event('jb-1', 'jambase'), name: 'Something Else Entirely' }
-    mockedTicketmasterSearch.mockResolvedValue({ events: [tmEvent], hasNextPage: false })
-    mockedJamBaseSearch.mockResolvedValue({ events: [jbEvent], hasNextPage: false })
+    mockedTicketmasterSearch.mockResolvedValue({ events: [tmEvent], truncated: false })
+    mockedJamBaseSearch.mockResolvedValue({ events: [jbEvent], truncated: false })
 
     const result = await searchEvents(params())
 

@@ -20,7 +20,6 @@ export function eventSearchQueryKey(params: EventSearchParams) {
       referenceTime: params.referenceTime,
       location: params.location,
       categories: params.categories ? [...params.categories].sort() : undefined,
-      page: params.page,
     },
   ] as const
 }

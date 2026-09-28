@@ -117,40 +117,117 @@ describe('ticketmasterProvider.searchEvents — location', () => {
 })
 
 describe('ticketmasterProvider.searchEvents — pagination', () => {
-  it('translates domain page 1 to Ticketmaster page 0 when page is omitted', async () => {
+  /** A page whose metadata claims `totalPages`, carrying `count` distinct events. */
+  function pageOf(count: number, totalPages: number, number: number): TicketmasterEventSearchResponse {
+    return searchResponse({
+      page: { size: 199, totalElements: totalPages * 199, totalPages, number },
+      _embedded: { events: Array.from({ length: count }, (_, i) => rawEvent({ id: `tm-${number}-${i}` })) },
+    })
+  }
+
+  it('requests the largest page size Ticketmaster accepts', async () => {
     mockedFetchEvents.mockResolvedValue(searchResponse())
 
-    await ticketmasterProvider.searchEvents(searchParams({ page: undefined }))
+    await ticketmasterProvider.searchEvents(searchParams())
+
+    // 200 or more is rejected by the API with DIS1036.
+    expect(mockedFetchEvents.mock.calls[0][0].size).toBe('199')
+  })
+
+  it('starts from Ticketmaster page 0', async () => {
+    mockedFetchEvents.mockResolvedValue(searchResponse())
+
+    await ticketmasterProvider.searchEvents(searchParams())
 
     expect(mockedFetchEvents.mock.calls[0][0].page).toBe('0')
   })
 
-  it('translates subsequent domain pages correctly', async () => {
+  it('makes a single request when the first page is the only one', async () => {
+    mockedFetchEvents.mockResolvedValue(pageOf(2, 1, 0))
+
+    const result = await ticketmasterProvider.searchEvents(searchParams())
+
+    expect(mockedFetchEvents).toHaveBeenCalledTimes(1)
+    expect(result.events).toHaveLength(2)
+    expect(result.truncated).toBe(false)
+  })
+
+  it('fetches every remaining page and returns the combined set', async () => {
+    mockedFetchEvents
+      .mockResolvedValueOnce(pageOf(3, 3, 0))
+      .mockResolvedValueOnce(pageOf(3, 3, 1))
+      .mockResolvedValueOnce(pageOf(2, 3, 2))
+
+    const result = await ticketmasterProvider.searchEvents(searchParams())
+
+    expect(mockedFetchEvents).toHaveBeenCalledTimes(3)
+    expect(mockedFetchEvents.mock.calls.map((call) => call[0].page)).toEqual(['0', '1', '2'])
+    expect(result.events).toHaveLength(8)
+    expect(result.truncated).toBe(false)
+  })
+
+  it('keeps every page on the same query apart from the page number', async () => {
+    mockedFetchEvents.mockResolvedValueOnce(pageOf(1, 2, 0)).mockResolvedValueOnce(pageOf(1, 2, 1))
+
+    await ticketmasterProvider.searchEvents(searchParams())
+
+    const [{ page: firstPage, ...firstQuery }, { page: secondPage, ...secondQuery }] =
+      mockedFetchEvents.mock.calls.map((call) => call[0])
+    expect(firstQuery).toEqual(secondQuery)
+    expect([firstPage, secondPage]).toEqual(['0', '1'])
+  })
+
+  it('stops at the paging depth Ticketmaster allows and reports the result as truncated', async () => {
+    // (page * size) must stay under 1,000, so with size=199 only pages 0-5
+    // are reachable — a search with more pages than that cannot be completed.
+    mockedFetchEvents.mockResolvedValue(pageOf(1, 40, 0))
+
+    const result = await ticketmasterProvider.searchEvents(searchParams())
+
+    expect(mockedFetchEvents).toHaveBeenCalledTimes(6)
+    expect(mockedFetchEvents.mock.calls.map((call) => call[0].page)).toEqual(['0', '1', '2', '3', '4', '5'])
+    expect(result.truncated).toBe(true)
+  })
+
+  it('does not request further pages when the first response reports none', async () => {
     mockedFetchEvents.mockResolvedValue(searchResponse())
 
-    await ticketmasterProvider.searchEvents(searchParams({ page: 3 }))
+    const result = await ticketmasterProvider.searchEvents(searchParams())
 
-    expect(mockedFetchEvents.mock.calls[0][0].page).toBe('2')
+    expect(mockedFetchEvents).toHaveBeenCalledTimes(1)
+    expect(result).toEqual({ events: [], truncated: false })
   })
 
-  it('computes hasNextPage from Ticketmaster pagination metadata', async () => {
-    mockedFetchEvents.mockResolvedValue(
-      searchResponse({ page: { size: 20, totalElements: 60, totalPages: 3, number: 0 } }),
-    )
+  it('applies the eligibility and mapping pipeline to every page, not just the first', async () => {
+    const ineligible = rawEvent({
+      id: 'tm-ineligible',
+      dates: {
+        start: { dateTime: '2026-09-18T09:00:00Z' },
+        timezone: 'Europe/Madrid',
+        access: { startDateTime: '2026-07-20T15:04:14Z', endDateTime: '2026-09-15T10:00:00Z' },
+      },
+    })
+    mockedFetchEvents
+      .mockResolvedValueOnce(pageOf(1, 2, 0))
+      .mockResolvedValueOnce(
+        searchResponse({
+          page: { size: 199, totalElements: 398, totalPages: 2, number: 1 },
+          _embedded: { events: [ineligible] },
+        }),
+      )
 
     const result = await ticketmasterProvider.searchEvents(searchParams())
 
-    expect(result.hasNextPage).toBe(true)
+    expect(mockedFetchEvents).toHaveBeenCalledTimes(2)
+    expect(result.events).toHaveLength(1)
   })
 
-  it('reports hasNextPage as false on the last page', async () => {
-    mockedFetchEvents.mockResolvedValue(
-      searchResponse({ page: { size: 20, totalElements: 60, totalPages: 3, number: 2 } }),
-    )
+  it('propagates a failure on a later page rather than returning a partial set', async () => {
+    mockedFetchEvents
+      .mockResolvedValueOnce(pageOf(1, 3, 0))
+      .mockRejectedValueOnce(new TicketmasterRequestError('boom', 500))
 
-    const result = await ticketmasterProvider.searchEvents(searchParams())
-
-    expect(result.hasNextPage).toBe(false)
+    await expect(ticketmasterProvider.searchEvents(searchParams())).rejects.toBeInstanceOf(TicketmasterRequestError)
   })
 })
 

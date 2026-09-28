@@ -68,24 +68,6 @@ describe('parseSearchUrlState — city', () => {
   })
 })
 
-describe('parseSearchUrlState — page', () => {
-  it('defaults to 1 when absent', () => {
-    expect(parseSearchUrlState(search('')).page).toBe(1)
-  })
-
-  it.each(['abc', '1.5', '-1', '-3', ''])('falls back to 1 for an invalid value: %s', (raw) => {
-    expect(parseSearchUrlState(search(`page=${raw}`)).page).toBe(1)
-  })
-
-  it('falls back to 1 for zero', () => {
-    expect(parseSearchUrlState(search('page=0')).page).toBe(1)
-  })
-
-  it('parses a valid positive integer', () => {
-    expect(parseSearchUrlState(search('page=3')).page).toBe(3)
-  })
-})
-
 describe('parseSearchUrlState — unrelated params', () => {
   it('ignores query params it does not recognize', () => {
     const state = parseSearchUrlState(search('foo=bar&mode=today&unrelated=1'))
@@ -97,7 +79,7 @@ describe('parseSearchUrlState — unrelated params', () => {
 })
 
 describe('serializeSearchUrlState', () => {
-  const baseState: SearchUrlState = { timeMode: 'now', page: 1 }
+  const baseState: SearchUrlState = { timeMode: 'now' }
 
   it('omits mode when it is the default (now)', () => {
     expect(serializeSearchUrlState(baseState).has('mode')).toBe(false)
@@ -105,14 +87,6 @@ describe('serializeSearchUrlState', () => {
 
   it('includes mode when it is not the default', () => {
     expect(serializeSearchUrlState({ ...baseState, timeMode: 'weekend' }).get('mode')).toBe('weekend')
-  })
-
-  it('omits page when it is 1', () => {
-    expect(serializeSearchUrlState(baseState).has('page')).toBe(false)
-  })
-
-  it('includes page when it is not 1', () => {
-    expect(serializeSearchUrlState({ ...baseState, page: 4 }).get('page')).toBe('4')
   })
 
   it('omits category when categories are absent', () => {
@@ -136,10 +110,10 @@ describe('serializeSearchUrlState', () => {
 
 describe('round-trip: parse(serialize(state)) === state', () => {
   const cases: SearchUrlState[] = [
-    { timeMode: 'now', page: 1 },
-    { timeMode: 'tonight', page: 1 },
-    { timeMode: 'weekend', categories: ['music', 'film'], citySlug: 'barcelona', page: 3 },
-    { timeMode: 'today', categories: ['other'], page: 1 },
+    { timeMode: 'now' },
+    { timeMode: 'tonight' },
+    { timeMode: 'weekend', categories: ['music', 'film'], citySlug: 'barcelona' },
+    { timeMode: 'today', categories: ['other'] },
   ]
 
   it.each(cases)('round-trips %j', (state) => {
@@ -155,8 +129,8 @@ describe('round-trip: parse(serialize(state)) === state', () => {
   })
 
   it('produces the same parsed state whether serialized from either category order', () => {
-    const fromA = serializeSearchUrlState({ timeMode: 'now', categories: ['music', 'film'], page: 1 })
-    const fromB = serializeSearchUrlState({ timeMode: 'now', categories: ['film', 'music'], page: 1 })
+    const fromA = serializeSearchUrlState({ timeMode: 'now', categories: ['music', 'film'] })
+    const fromB = serializeSearchUrlState({ timeMode: 'now', categories: ['film', 'music'] })
 
     expect(fromA.toString()).toBe(fromB.toString())
   })

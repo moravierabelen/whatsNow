@@ -26,21 +26,21 @@ const MODE_HEADLINE: Record<TimeMode, { eyebrow: string; headline: string }> = {
 }
 
 export function DiscoveryPage() {
-  const { data, isPending, isError, fetchStatus, urlState } = useEventSearchFromUrl()
+  const { data, isPending, isError, isFetching, refetch, fetchStatus, urlState } = useEventSearchFromUrl()
   const setSearchUrlState = useSetSearchUrlState()
 
   const category: EventCategory | 'all' = urlState.categories?.[0] ?? 'all'
 
   function handleModeChange(timeMode: TimeMode) {
-    setSearchUrlState({ ...urlState, timeMode, page: 1 })
+    setSearchUrlState({ ...urlState, timeMode })
   }
 
   function handleCategoryChange(next: EventCategory | 'all') {
-    setSearchUrlState({ ...urlState, categories: next === 'all' ? undefined : [next], page: 1 })
+    setSearchUrlState({ ...urlState, categories: next === 'all' ? undefined : [next] })
   }
 
   function clearFilters() {
-    setSearchUrlState({ ...urlState, categories: undefined, page: 1 })
+    setSearchUrlState({ ...urlState, categories: undefined })
   }
 
   const header = (
@@ -79,7 +79,23 @@ export function DiscoveryPage() {
       <div className="min-h-svh bg-paper">
         {header}
         <main className="mx-auto max-w-310 px-6 py-14 lg:px-8">
-          <p className="text-sm text-ink-muted">Could not load events.</p>
+          {/* Centered to match `LoadingRadar`, which this replaces once the
+              automatic retries give up — the two states occupy the same
+              spot, so left-aligning one of them makes the page jump. */}
+          <div className="flex flex-col items-center justify-center gap-4 py-14">
+            <p className="text-sm text-ink-muted">Could not load events.</p>
+            {/* TanStack Query has already retried on its own by this point,
+                so this is the explicit "try again now" the user is left
+                with, rather than reloading the whole page. */}
+            <button
+              type="button"
+              onClick={() => refetch()}
+              disabled={isFetching}
+              className="cursor-pointer rounded-full bg-ink px-4 py-2 text-sm font-semibold text-white hover:bg-ink/90 disabled:cursor-default disabled:opacity-60"
+            >
+              {isFetching ? 'Retrying…' : 'Try again'}
+            </button>
+          </div>
         </main>
       </div>
     )
@@ -100,6 +116,17 @@ export function DiscoveryPage() {
   // surface via "More plans", or it disappears from the page entirely.
   const rest = sortByStart(featured ? events.filter(event => event.id !== featured.id) : events)
   const { eyebrow, headline } = MODE_HEADLINE[urlState.timeMode]
+
+  // Two different reasons a result can be short, with two different
+  // remedies: a source that failed may well work on the next try, while a
+  // truncated one needs a narrower search. Neither is worth naming the
+  // provider over — that is our plumbing, not the user's problem.
+  const incompleteResultsNotice =
+    data.failedProviders.length > 0
+      ? 'One of our sources is not responding, so some plans may be missing.'
+      : data.truncated
+        ? 'There are more plans than we can show here — try narrowing by category.'
+        : undefined
 
   return (
     <div className="min-h-svh bg-paper pb-24 lg:pb-20">
@@ -146,6 +173,12 @@ export function DiscoveryPage() {
               across the city
               {category !== 'all' ? ` in ${CATEGORY_LABEL[category]}` : ''}.
             </p>
+          )}
+          {/* Sits outside the branch above so it also shows alongside an
+              empty result — "nothing found" and "a source went down" look
+              identical otherwise, and only one of them is the city's fault. */}
+          {incompleteResultsNotice && (
+            <p className="hero-anim-count mt-1 text-xs text-ink-faint">{incompleteResultsNotice}</p>
           )}
         </div>
 

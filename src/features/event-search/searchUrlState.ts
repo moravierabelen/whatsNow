@@ -12,11 +12,9 @@ export interface SearchUrlState {
   timeMode: TimeMode
   categories?: EventCategory[]
   citySlug?: string
-  page: number
 }
 
 const DEFAULT_TIME_MODE: TimeMode = 'now'
-const DEFAULT_PAGE = 1
 
 const VALID_TIME_MODES: readonly TimeMode[] = ['now', 'tonight', 'today', 'tomorrow', 'weekend']
 
@@ -42,13 +40,6 @@ function normalizeCategories(categories: EventCategory[]): EventCategory[] | und
   return canonical.length > 0 ? canonical : undefined
 }
 
-/** Absent, non-digit, decimal, zero, or negative all fall back to 1 — no maximum is enforced. */
-function parsePage(rawPage: string | null): number {
-  if (rawPage === null || !/^\d+$/.test(rawPage)) return DEFAULT_PAGE
-  const page = Number(rawPage)
-  return page >= 1 ? page : DEFAULT_PAGE
-}
-
 export function parseSearchUrlState(params: URLSearchParams): SearchUrlState {
   const rawMode = params.get('mode')
   const timeMode = rawMode !== null && isValidTimeMode(rawMode) ? rawMode : DEFAULT_TIME_MODE
@@ -66,9 +57,7 @@ export function parseSearchUrlState(params: URLSearchParams): SearchUrlState {
   const rawCity = params.get('city')
   const citySlug = rawCity && rawCity.length > 0 ? rawCity : undefined
 
-  const page = parsePage(params.get('page'))
-
-  return { timeMode, categories, citySlug, page }
+  return { timeMode, categories, citySlug }
 }
 
 export function serializeSearchUrlState(state: SearchUrlState): URLSearchParams {
@@ -85,10 +74,6 @@ export function serializeSearchUrlState(state: SearchUrlState): URLSearchParams 
 
   if (state.citySlug) {
     params.set('city', state.citySlug)
-  }
-
-  if (state.page !== DEFAULT_PAGE) {
-    params.set('page', String(state.page))
   }
 
   return params
