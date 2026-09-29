@@ -148,10 +148,20 @@ describe('mapTicketmasterEvent', () => {
     expect(result).toBeNull()
   })
 
-  it('rejects an event with no usable URL', () => {
+  it('keeps an event with no usable URL, leaving url undefined', () => {
+    // A name, a time and a venue are enough to be a real plan — the card
+    // simply does not link anywhere (see `Event.url`).
     const result = mapTicketmasterEvent(baseEvent({ url: undefined }))
 
-    expect(result).toBeNull()
+    expect(result).not.toBeNull()
+    expect(result?.url).toBeUndefined()
+    expect(result?.name).toBe('Test Concert')
+  })
+
+  it('leaves url undefined for a malformed URL rather than passing it through', () => {
+    const result = mapTicketmasterEvent(baseEvent({ url: 'not-a-url' }))
+
+    expect(result?.url).toBeUndefined()
   })
 
   it('deterministically selects a landscape image over other ratios', () => {

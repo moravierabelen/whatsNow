@@ -2,15 +2,17 @@ import { ArrowSquareOutIcon } from '@phosphor-icons/react'
 import type { PriceRange } from '../../domain/events/event'
 import { formatPrice } from './eventDisplay'
 
-/**
- * The price slot: formatted price when we have one, otherwise "View
- * tickets" — every `Event` always has a real ticketing `url` (the parent
- * card/row is already a link to it), so there's no case left where a bare
- * "Price TBA" is the only honest option.
- */
-export function EventPrice({ priceRange }: { priceRange: PriceRange | undefined }) {
+interface EventPriceProps {
+  priceRange: PriceRange | undefined
+  /** Whether the surrounding card actually links out (see `Event.url`). */
+  hasLink: boolean
+}
+
+/** Price when known, else "View tickets" — but never a CTA on a card that links nowhere. */
+export function EventPrice({ priceRange, hasLink }: EventPriceProps) {
   const price = formatPrice(priceRange)
   if (price) return <span className="font-mono">{price}</span>
+  if (!hasLink) return null
 
   return (
     <span className="inline-flex items-center gap-1">

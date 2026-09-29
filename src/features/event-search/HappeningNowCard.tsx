@@ -1,6 +1,7 @@
 import type { Event } from '../../domain/events/event'
 import { displayEventName } from './eventDisplay'
 import { EventThumbnail } from './EventThumbnail'
+import { MaybeLink } from './MaybeLink'
 import { LiveDot } from './LiveDot'
 
 /**
@@ -11,10 +12,8 @@ import { LiveDot } from './LiveDot'
  */
 export function HappeningNowCard({ event }: { event: Event }) {
   return (
-    <a
+    <MaybeLink
       href={event.url}
-      target="_blank"
-      rel="noopener noreferrer"
       className="happening-card group flex w-full shrink-0 flex-col overflow-hidden text-left"
     >
       <div className="happening-card-image relative aspect-[4/3] w-full overflow-hidden">
@@ -28,6 +27,6 @@ export function HappeningNowCard({ event }: { event: Event }) {
         <h3 className="font-display text-sm font-semibold leading-snug text-ink">{displayEventName(event)}</h3>
         <p className="truncate text-xs text-ink-muted">{event.venue.name}</p>
       </div>
-    </a>
+    </MaybeLink>
   )
 }

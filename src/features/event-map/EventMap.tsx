@@ -38,20 +38,8 @@ function centroid(coordinates: Coordinates[]): Coordinates {
 }
 
 /**
- * Self-contained event map: one marker per event (clustered), CARTO tiles.
- * Clicking an individual marker selects it and shows a small preview card
- * overlaid on the map (see `MarkerPreviewCard`) — clicking a cluster still
- * just zooms/spiderfies as normal, untouched. Not yet wired to list sync,
- * URL state, or a real event detail experience — the preview card is only
- * enough to identify which event a marker represents.
- *
- * `MapContainer`'s `center`/`zoom` are only the *initial* view in React
- * Leaflet — they don't re-center the map on later prop changes. Recentering
- * when `events` changes is left for the future map/list-sync integration.
- *
- * The map fills its container (`height: 100%`/`width: 100%`); the parent
- * must give that container an explicit height, or Leaflet renders a
- * zero-height map — a well-known Leaflet integration gotcha, not a bug here.
+ * The parent must give this an explicit height or Leaflet renders nothing.
+ * `center`/`zoom` are the initial view only; they do not re-center on prop changes.
  */
 export function EventMap({ events, referenceTime, defaultCenter }: EventMapProps) {
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null)

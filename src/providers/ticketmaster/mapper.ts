@@ -94,9 +94,6 @@ export function mapTicketmasterEvent(raw: TicketmasterEvent): Event | null {
     const venue = mapVenue(raw._embedded?.venues?.[0])
     if (!venue) return null
 
-    const url = raw.url
-    if (!isUsableUrl(url)) return null
-
     const endUtc = raw.dates?.end?.dateTime
 
     return {
@@ -104,12 +101,11 @@ export function mapTicketmasterEvent(raw: TicketmasterEvent): Event | null {
       source: { provider: 'ticketmaster', externalId: raw.id },
       name: raw.name,
       category: mapCategory(raw.classifications),
-      // Ticketmaster always gives a real dateTime with a time component —
-      // `isEligibleTicketmasterEvent` already screens out date-only/TBA events.
+      // Eligibility already screened out date-only/TBA events.
       start: { utc: startUtc, timeZone, timeKnown: true },
       end: endUtc ? { utc: endUtc, timeZone } : undefined,
       venue,
-      url,
+      url: isUsableUrl(raw.url) ? raw.url : undefined,
       image: mapImage(raw.images),
       priceRange: mapPriceRange(raw.priceRanges),
     }

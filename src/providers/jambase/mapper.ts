@@ -46,12 +46,7 @@ function mapVenue(location: JamBaseVenue | undefined): Venue | null {
   }
 }
 
-/**
- * JamBase gives no width/height for this image (unlike Ticketmaster) — that's
- * why `EventImage.width`/`height` are optional in the domain. Observed in
- * real data to be the same URL as the event's headliner performer photo, so
- * the top-level field is used directly rather than reaching into `performer`.
- */
+/** JamBase gives no dimensions for this image, hence the optional width/height. */
 function mapImage(url: string | undefined): EventImage | undefined {
   return isUsableUrl(url) ? { url } : undefined
 }
@@ -95,17 +90,8 @@ function toUtcInstant(localNaive: string, timeZone: string): string | null {
 const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/
 
 /**
- * JamBase's `startDate` is usually a naive local datetime, but for some
- * listings (festivals in particular) it's just a date, e.g. "2026-09-25" —
- * no time component at all. Silently feeding that into `toUtcInstant`
- * previously parsed it as an ISO date-only string (UTC midnight per the JS
- * spec), not local midnight — producing a fabricated, wrong-timezone
- * instant (a real event showing "02:00" for a source with no time at all).
- *
- * `timeKnown: false` here means: `utc` is only a same-day anchor (local
- * midnight, so date/window-membership checks stay correct) — every
- * consumer that would present a real clock time or classify the event as
- * imminent/live must check this flag first, never trust `utc` alone.
+ * A bare "2026-09-25" must be forced to local midnight: JS parses date-only
+ * strings as UTC, which showed a timeless festival as starting at 02:00.
  */
 function parseStartDate(rawStartDate: string, timeZone: string): { utc: string; timeKnown: boolean } | null {
   if (DATE_ONLY_PATTERN.test(rawStartDate)) {
@@ -116,15 +102,7 @@ function parseStartDate(rawStartDate: string, timeZone: string): { utc: string; 
   return utc ? { utc, timeKnown: true } : null
 }
 
-/**
- * JamBase's `endDate` is always date-only (see `JamBaseEvent.endDate`),
- * never a time — so this is a plain calendar-date comparison, not a
- * temporal/window one. Returns the raw end date only when it's genuinely
- * different from the start's own local date (same-day festivals are just
- * a normal single day, not a range); presentation decides separately
- * whether to actually use it (only ever when `start.timeKnown` is false —
- * see `Event.endDate`'s doc comment).
- */
+/** Only kept when it differs from the start's own date; a same-day run is not a range. */
 function resolveEndDate(startDate: string, endDate: string | undefined): string | undefined {
   if (!endDate || !DATE_ONLY_PATTERN.test(endDate)) return undefined
   return endDate !== startDate.slice(0, 10) ? endDate : undefined
@@ -146,7 +124,6 @@ export function mapJamBaseEvent(raw: JamBaseEvent): Event | null {
 
     const offer = selectTicketingOffer(raw.offers)
     const url = offer?.url ?? raw.url
-    if (!isUsableUrl(url)) return null
 
     return {
       id: encodeEventId({ provider: 'jambase', externalId }),
@@ -157,7 +134,7 @@ export function mapJamBaseEvent(raw: JamBaseEvent): Event | null {
       end: undefined,
       endDate: resolveEndDate(raw.startDate, raw.endDate),
       venue,
-      url,
+      url: isUsableUrl(url) ? url : undefined,
       image: mapImage(raw.image),
       priceRange: offer ? mapPriceRange(offer.priceSpecification) : undefined,
     }

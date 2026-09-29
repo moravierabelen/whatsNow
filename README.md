@@ -4,6 +4,8 @@
 
 **[Live demo →](https://whats-now-one.vercel.app/)**
 
+[![CI](https://github.com/moravierabelen/whatsNow/actions/workflows/ci.yml/badge.svg)](https://github.com/moravierabelen/whatsNow/actions/workflows/ci.yml)
+
 whatsnow is a map-first event discovery app for finding things to do in the city, whether they're happening right now, tonight, later today, tomorrow, or this weekend.
 
 The goal is simple: reduce the friction between **"I want to do something"** and **"here's somewhere worth going."**

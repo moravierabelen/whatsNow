@@ -7,28 +7,13 @@ import { JamBaseRequestError, fetchJamBaseEventById, fetchJamBaseEvents } from '
 import { mapJamBaseEvent } from './mapper'
 import type { JamBaseEventDetailResponse, JamBaseEventSearchResponse } from './types'
 
-/**
- * JamBase's documented maximum: `perPage` above 100 is rejected with
- * "The perPage value `200` is not valid. Please use a number between 1 and
- * 100." Verified against the real API.
- */
+/** JamBase rejects `perPage` above 100. */
 const PAGE_SIZE = 100
 
-/**
- * Hard stop for the fetch loop, so an unexpected `totalPages` can never
- * turn it into an unbounded request loop. JamBase publishes no paging depth
- * limit of its own, and this is deliberately far above real demand: the
- * widest time mode is a weekend (~2.5 days), where even a dense city sits
- * in the low hundreds of events. Reaching this cap means the result is
- * knowingly incomplete, so it reports `truncated`.
- */
+/** Safety stop: JamBase has no paging depth limit of its own. */
 const MAX_PAGES = 20
 
-/**
- * JamBase's query vocabulary is coordinates + radius (there is no working
- * city-name parameter), so the shared `domain/cities` config already has
- * everything this provider needs — nothing provider-specific to add here.
- */
+/** JamBase queries by coordinates + radius; it has no working city-name parameter. */
 function resolveLocationParams(location: EventLocation): { params: Record<string, string>; timeZone: string } {
   if (location.type === 'city') {
     const config = getCityConfig(location.citySlug)
@@ -58,23 +43,10 @@ function localDateString(instantIso: string, timeZone: string): string {
 }
 
 /**
- * Translates the domain's half-open [start, end) window into the inclusive
- * eventDateFrom/eventDateTo dates JamBase's search expects, taking the local
- * date of `end - 1ms` so an exact-midnight boundary (Today, Weekend) doesn't
- * pull in an extra day.
- *
- * JamBase's Developer tier rejects `eventDateFrom` before its own current
- * date (confirmed: HTTP 400 "eventDateFrom must be on or after ..." — fixing
- * this requires `expandPastEvents=true`, a Pro+-only feature). Tonight's
- * window can start "yesterday" during the early-morning tail of the night
- * (e.g. querying at 02:00 for a window that began at 18:00 the previous
- * evening) — in that case `eventDateFrom` is clamped to today rather than
- * sent as-is. This does not change Tonight's semantics or invent any
- * candidate: it means JamBase specifically cannot contribute candidates
- * dated the previous evening during that window, a known limitation of the
- * free tier. `eventOverlapsWindow` is still re-applied against the exact
- * domain window below, so nothing incorrect is included — only JamBase's
- * own recall is reduced for that slice of time.
+ * Half-open window -> the inclusive dates JamBase expects. `end - 1ms` keeps a
+ * midnight boundary from pulling in an extra day, and the Developer tier
+ * rejects an `eventDateFrom` before today, so Tonight's early-morning tail is
+ * clamped (costing JamBase recall for that slice, never correctness).
  */
 function resolveDateRange(
   window: { start: string; end: string },
@@ -89,13 +61,7 @@ function resolveDateRange(
   return { eventDateFrom, eventDateTo: windowEndDate }
 }
 
-/**
- * JamBase only filters by date, not time, so the exact domain window must be
- * re-applied to the mapped candidates — this is what actually narrows e.g.
- * Tonight down from "the two calendar days involved" to "18:00 -> 06:00".
- * It runs per page, which means a page of 100 raw events can legitimately
- * yield far fewer domain events.
- */
+/** JamBase filters by date only, so the exact window is re-applied here. */
 function mapEventsInWindow(
   response: JamBaseEventSearchResponse,
   window: { start: string; end: string },
@@ -107,15 +73,8 @@ function mapEventsInWindow(
 }
 
 /**
- * Fetches every page JamBase will serve for this search, not just the first
- * — the page size and page bookkeeping are provider details that stay in
- * here, and callers get one complete result set.
- *
- * The loop is driven by the `totalPages` of the *first* response, never by
- * the `pagination` echoed back on later pages: asking JamBase for a page
- * past the end does not error, it returns `{page: 0, totalItems: 0,
- * totalPages: 0}` (verified against the real API), so trusting that would
- * corrupt the loop's own bounds mid-flight.
+ * Bounds come from the *first* response only: a page past the end returns
+ * `{totalPages: 0}` instead of erroring, which would corrupt the loop.
  */
 async function searchEvents(params: EventSearchParams): Promise<EventSearchResult> {
   if (params.categories && !params.categories.includes('music')) {

@@ -79,14 +79,10 @@ export function DiscoveryPage() {
       <div className="min-h-svh bg-paper">
         {header}
         <main className="mx-auto max-w-310 px-6 py-14 lg:px-8">
-          {/* Centered to match `LoadingRadar`, which this replaces once the
-              automatic retries give up — the two states occupy the same
-              spot, so left-aligning one of them makes the page jump. */}
+          {/* Centered to match `LoadingRadar`, which occupies this same spot. */}
           <div className="flex flex-col items-center justify-center gap-4 py-14">
             <p className="text-sm text-ink-muted">Could not load events.</p>
-            {/* TanStack Query has already retried on its own by this point,
-                so this is the explicit "try again now" the user is left
-                with, rather than reloading the whole page. */}
+            {/* Query has already exhausted its automatic retries by now. */}
             <button
               type="button"
               onClick={() => refetch()}
@@ -117,10 +113,7 @@ export function DiscoveryPage() {
   const rest = sortByStart(featured ? events.filter(event => event.id !== featured.id) : events)
   const { eyebrow, headline } = MODE_HEADLINE[urlState.timeMode]
 
-  // Two different reasons a result can be short, with two different
-  // remedies: a source that failed may well work on the next try, while a
-  // truncated one needs a narrower search. Neither is worth naming the
-  // provider over — that is our plumbing, not the user's problem.
+  // Two causes, two remedies: a failed source may recover, a truncated one needs narrowing.
   const incompleteResultsNotice =
     data.failedProviders.length > 0
       ? 'One of our sources is not responding, so some plans may be missing.'
@@ -174,9 +167,7 @@ export function DiscoveryPage() {
               {category !== 'all' ? ` in ${CATEGORY_LABEL[category]}` : ''}.
             </p>
           )}
-          {/* Sits outside the branch above so it also shows alongside an
-              empty result — "nothing found" and "a source went down" look
-              identical otherwise, and only one of them is the city's fault. */}
+          {/* Outside the branch above so it also shows on an empty result. */}
           {incompleteResultsNotice && (
             <p className="hero-anim-count mt-1 text-xs text-ink-faint">{incompleteResultsNotice}</p>
           )}

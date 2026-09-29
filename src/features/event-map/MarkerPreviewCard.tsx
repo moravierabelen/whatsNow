@@ -14,54 +14,34 @@ interface MarkerPreviewCardProps {
 }
 
 /**
- * Small event preview shown inside the map when an individual marker is
- * selected — replaces Leaflet's native popup (name-only) with something
- * that actually looks like whatsnow. Reuses `EventThumbnail` and
- * `formatEventTime` rather than re-deriving image/time presentation, and
- * deliberately stays minimal: image, name, venue, time — no price,
- * category, or CTA, and no link to `FeaturedEvent`, which this never
- * touches.
- *
- * Owns its own enter/exit transition since nothing in this project
- * provides one: on deselect (`event` -> null) it keeps rendering the last
- * event for `EXIT_DURATION_MS` while fading/sliding out, then unmounts —
- * a plain conditional render would cut the exit animation off instantly.
- * Switching directly from one marker to another swaps the card's content
- * in place, without re-running the enter animation.
+ * Replaces Leaflet's native marker popup. Keeps rendering the last event for
+ * `EXIT_DURATION_MS` after deselection so the exit transition can finish.
  */
 export function MarkerPreviewCard({ event, referenceTime, onClose }: MarkerPreviewCardProps) {
   const [renderedEvent, setRenderedEvent] = useState<Event | null>(null)
   const [visible, setVisible] = useState(false)
   const [lastEventProp, setLastEventProp] = useState<Event | null>(null)
 
-  // Adjust state during rendering in response to the `event` prop
-  // changing, instead of mirroring it via an effect (React's own
-  // recommended alternative — see "You Might Not Need an Effect").
+  // Adjusting state during render, rather than mirroring a prop via an effect.
   if (event !== lastEventProp) {
     setLastEventProp(event)
     if (event) {
       setRenderedEvent(event)
-      // Only reset to hidden on a *fresh* selection (nothing was shown
-      // before) — the enter effect below then animates it in. Switching
-      // between two already-visible markers leaves `visible` alone, so
-      // the card's content just swaps in place.
+      // Only a fresh selection animates in; switching markers swaps content in place.
       if (renderedEvent === null) setVisible(false)
     } else {
       setVisible(false)
     }
   }
 
-  // Enter: once a fresh selection has been committed hidden above, flip
-  // to visible on the next frame so the transition actually plays instead
-  // of the card just appearing already in its final state.
+  // Flip to visible a frame later, so the transition has a hidden state to play from.
   useEffect(() => {
     if (!renderedEvent || visible) return
     const frame = requestAnimationFrame(() => setVisible(true))
     return () => cancelAnimationFrame(frame)
   }, [renderedEvent, visible])
 
-  // Exit: `event` went back to null — keep the (now fading-out) card
-  // mounted just long enough for the transition to finish, then unmount.
+  // Unmount only after the exit transition has had time to run.
   useEffect(() => {
     if (event !== null || renderedEvent === null) return
     const timeout = setTimeout(() => setRenderedEvent(null), EXIT_DURATION_MS)

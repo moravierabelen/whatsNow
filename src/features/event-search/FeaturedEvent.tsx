@@ -3,6 +3,7 @@ import type { Event } from '../../domain/events/event'
 import { CATEGORY_ICON } from './categoryPresentation'
 import { displayEventName, formatPrice } from './eventDisplay'
 import { EventThumbnail } from './EventThumbnail'
+import { MaybeLink } from './MaybeLink'
 import { LiveDot } from './LiveDot'
 
 interface FeaturedEventProps {
@@ -32,10 +33,8 @@ export function FeaturedEvent({ event, live, timeLabel }: FeaturedEventProps) {
   const CategoryIcon = CATEGORY_ICON[event.category]
 
   return (
-    <a
+    <MaybeLink
       href={event.url}
-      target="_blank"
-      rel="noopener noreferrer"
       className="card-panel flex flex-col overflow-hidden border border-border-strong bg-surface lg:h-full"
     >
       <EventThumbnail event={event} variant="hero" className="h-40 w-full shrink-0 sm:h-44 lg:h-auto lg:flex-[0_0_44%]" />
@@ -53,10 +52,7 @@ export function FeaturedEvent({ event, live, timeLabel }: FeaturedEventProps) {
         </h3>
         <div className="flex flex-col gap-1 text-sm text-ink-muted">
           <span className="flex items-center gap-1 truncate">
-            {/* MapPinSimpleIcon's glyph is inset ~27% inside its own box
-                (unlike the category icon above, which fills its box) — the
-                negative margin pulls its visible ink back to the same left
-                edge as the category icon / the time line below it. */}
+            {/* The pin glyph sits ~27% inside its own box; this pulls it back into line. */}
             <MapPinSimpleIcon className="-ml-1 h-3.5 w-3.5 shrink-0" weight="bold" aria-hidden="true" />
             <span className="truncate">{event.venue.name}</span>
           </span>
@@ -70,11 +66,13 @@ export function FeaturedEvent({ event, live, timeLabel }: FeaturedEventProps) {
             )}
           </span>
         </div>
-        <span className="mt-auto flex items-center gap-1 pt-4 text-xs font-semibold text-accent">
-          View tickets
-          <span aria-hidden="true">→</span>
-        </span>
+        {event.url && (
+          <span className="mt-auto flex items-center gap-1 pt-4 text-xs font-semibold text-accent">
+            View tickets
+            <span aria-hidden="true">→</span>
+          </span>
+        )}
       </div>
-    </a>
+    </MaybeLink>
   )
 }

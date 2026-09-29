@@ -7,21 +7,14 @@ import { isEligibleTicketmasterEvent } from './eligibility'
 import { mapTicketmasterEvent } from './mapper'
 import type { TicketmasterEvent, TicketmasterEventSearchResponse } from './types'
 
-/**
- * Ticketmaster's own city-name query vocabulary — a provider-specific fact
- * on top of the shared city/timezone/coordinates config in `domain/cities`.
- */
+/** Ticketmaster's own city vocabulary, on top of the shared `domain/cities` config. */
 const TICKETMASTER_CITY_PARAMS: Record<string, { city: string; countryCode: string }> = {
   barcelona: { city: 'Barcelona', countryCode: 'ES' },
 }
 
 /**
- * Verified against the real API during the spike as individual values
- * (classificationName=Music, =Sports, etc.). Combining multiple values in
- * one request was never tested, so a multi-category request omits this
- * filter entirely rather than guessing a combination syntax — the query
- * simply becomes broader, which is safe (over-fetching candidates is fine;
- * inventing an untested filter syntax is not).
+ * Only single values are verified against the real API, so a multi-category
+ * request drops the filter rather than guessing a combination syntax.
  */
 const CATEGORY_TO_CLASSIFICATION_NAME: Partial<Record<EventCategory, string>> = {
   music: 'Music',
@@ -55,28 +48,13 @@ function toTicketmasterDateTime(isoInstant: string): string {
   return new Date(isoInstant).toISOString().split('.')[0] + 'Z'
 }
 
-/**
- * The largest page Ticketmaster accepts: `size` of 200 or more is rejected
- * with `DIS1036: Query param "size" must be less than 200`. Verified
- * against the real API.
- */
+/** Ticketmaster rejects `size` of 200 or more (DIS1036). */
 const PAGE_SIZE = 199
 
-/**
- * Ticketmaster refuses to page deeper than this, with
- * `DIS1035: API Limits Exceeded: Max paging depth exceeded. (page * size)
- * must be less than 1,000` — also verified against the real API. It is a
- * property of the search, not of our key or plan: roughly the first 1,000
- * matches are the only ones reachable at all, and a broader search has to
- * be narrowed rather than paged through.
- */
+/** Ticketmaster rejects `(page * size)` of 1,000 or more (DIS1035). */
 const MAX_PAGING_DEPTH = 1000
 
-/**
- * Page indices `0 .. MAX_PAGES - 1` are the ones `MAX_PAGING_DEPTH` allows,
- * which doubles as the hard stop for the fetch loop below — an unexpected
- * `totalPages` can never turn it into an unbounded request loop.
- */
+/** The pages that depth allows, doubling as the loop's hard stop. */
 const MAX_PAGES = Math.ceil(MAX_PAGING_DEPTH / PAGE_SIZE)
 
 function mapEligibleEvents(response: TicketmasterEventSearchResponse): Event[] {
@@ -87,14 +65,8 @@ function mapEligibleEvents(response: TicketmasterEventSearchResponse): Event[] {
 }
 
 /**
- * Fetches every page Ticketmaster will serve for this search, not just the
- * first — the page size and the paging depth ceiling are provider details
- * that stay in here, and callers get one complete result set.
- *
- * Pages are requested one after another rather than in parallel: the common
- * case is a single page, the ceiling is `MAX_PAGES` (6), and Ticketmaster's
- * free tier also limits requests per second, so a burst buys very little
- * and risks being throttled.
+ * Sequential rather than parallel: the common case is one page, the ceiling is
+ * six, and the free tier limits requests per second.
  */
 async function searchEvents(params: EventSearchParams): Promise<EventSearchResult> {
   const { params: locationParams, timeZone } = resolveLocationParams(params.location)
@@ -116,8 +88,6 @@ async function searchEvents(params: EventSearchParams): Promise<EventSearchResul
   const firstPage = (await fetchTicketmasterEvents({ ...query, page: '0' })) as TicketmasterEventSearchResponse
   const events = mapEligibleEvents(firstPage)
 
-  // Ticketmaster reports the total up front, so the page count is known
-  // after the first request — no need to probe for an empty page.
   const totalPages = firstPage.page.totalPages
   const reachablePages = Math.min(totalPages, MAX_PAGES)
 

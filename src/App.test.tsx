@@ -174,6 +174,23 @@ describe('App', () => {
     })
   })
 
+  it('renders an event with no url as a card that links nowhere, instead of hiding it', async () => {
+    // Public cultural listings often have no page of their own. The event
+    // is still shown; the card just is not a link (see `Event.url`).
+    const { url, ...withoutUrl } = SAMPLE_EVENT
+    void url
+    mockedSearchEvents.mockResolvedValue({ events: [withoutUrl], truncated: false, failedProviders: [] })
+
+    renderApp('/')
+
+    const title = await screen.findByText('Test Concert')
+    // Scoped to the card itself: <main> also contains Leaflet's own
+    // attribution links, which are not what this is about.
+    expect(title.closest('a')).toBeNull()
+    // The dead-end CTA must not be promised either.
+    expect(within(screen.getByRole('main')).queryByText('View tickets')).not.toBeInTheDocument()
+  })
+
   it('shows an error state when the search fails', async () => {
     mockedSearchEvents.mockRejectedValue(new Error('boom'))
 

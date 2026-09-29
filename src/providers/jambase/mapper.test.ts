@@ -231,10 +231,14 @@ describe('mapJamBaseEvent', () => {
     expect(result?.url).toBe('https://www.jambase.com/show/fritz-kalkbrenner-go-beach-club-barcelona-20260919')
   })
 
-  it('rejects an event with neither a usable offer URL nor a usable top-level URL', () => {
+  it('keeps an event with neither a usable offer URL nor a usable top-level URL', () => {
+    // A name, a time and a venue are enough to be a real plan — the card
+    // simply does not link anywhere (see `Event.url`).
     const result = mapJamBaseEvent(baseEvent({ offers: [], url: undefined }))
 
-    expect(result).toBeNull()
+    expect(result).not.toBeNull()
+    expect(result?.url).toBeUndefined()
+    expect(result?.name).toBe('Fritz Kalkbrenner at SEASEACLUB')
   })
 
   it('leaves priceRange undefined when priceSpecification has no currency, rather than treating it as free', () => {
