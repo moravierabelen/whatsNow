@@ -1,15 +1,16 @@
-# whatsNow
+# whatsnow
 
 > Find something worth doing right now.
 
-whatsNow is a map-first event discovery app for finding things to do in the city, whether they're happening right now, tonight, later today, tomorrow, or this weekend.
+**[Live demo →](https://whats-now-one.vercel.app/)**
+
+whatsnow is a map-first event discovery app for finding things to do in the city, whether they're happening right now, tonight, later today, tomorrow, or this weekend.
 
 The goal is simple: reduce the friction between **"I want to do something"** and **"here's somewhere worth going."**
 
 Barcelona is the first supported city, but the application is designed to be city-agnostic.
 
 <!-- TODO: add a screenshot (or short GIF) of the discovery view here — it is the first thing a reader looks for. -->
-<!-- TODO: add the live demo link here once the app is deployed. -->
 
 ## Features
 
@@ -29,7 +30,7 @@ Barcelona is the first supported city, but the application is designed to be cit
 
 ## How it works
 
-whatsNow combines events from external providers and normalizes them into a common internal event model.
+whatsnow combines events from external providers and normalizes them into a common internal event model.
 
 The application then applies its own temporal logic to determine which events are relevant for the selected time mode.
 
@@ -76,7 +77,7 @@ A search returns everything it can reach, and says so when it cannot reach every
 
 ## Temporal model
 
-Time is one of the core parts of whatsNow. All temporal calculations use the event's own venue timezone rather than relying on the browser's local timezone.
+Time is one of the core parts of whatsnow. All temporal calculations use the event's own venue timezone rather than relying on the browser's local timezone.
 
 | Mode         | Window                                                                                                    |
 | ------------ | --------------------------------------------------------------------------------------------------------- |
@@ -162,7 +163,7 @@ pnpm build       # tsc -b && vite build
 
 ## Project status
 
-whatsNow is currently an MVP.
+whatsnow is currently an MVP.
 
 The current focus is on making the discovery experience reliable and useful with real event data. The project deliberately avoids adding features such as accounts, personalization, social features, or a backend database until there is a clear product reason for them.
 
@@ -186,7 +187,7 @@ Most event platforms start from the question:
 
 > "What event are you looking for?"
 
-whatsNow starts somewhere else:
+whatsnow starts somewhere else:
 
 > "What can I do right now?"
 

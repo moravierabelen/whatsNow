@@ -45,6 +45,9 @@ function renderApp(initialEntry: string) {
 
 afterEach(() => {
   vi.clearAllMocks()
+  // Unconditional, so a test that pins the clock and then fails cannot
+  // leave fake timers behind for the rest of the file.
+  vi.useRealTimers()
 })
 
 describe('App', () => {
@@ -130,11 +133,17 @@ describe('App', () => {
     })
 
     it('shows the later-today empty state, hides markers/featured, and links to More plans', async () => {
+      // The clock is pinned rather than offset from the real one: "later
+      // today" cannot be expressed as "now + 8h", which lands on tomorrow
+      // whenever the suite runs after ~16:00 local.
+      vi.useFakeTimers({ shouldAdvanceTime: true })
+      vi.setSystemTime(new Date('2026-09-15T08:00:00Z')) // 10:00 in Europe/Madrid
+
       const laterToday: Event = {
         ...SAMPLE_EVENT,
         id: 'evt-later',
-        // Well past the 180min "starting soon" window, same local day.
-        start: { utc: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString(), timeZone: 'Europe/Madrid', timeKnown: true },
+        // 20:00 local the same day: well past the 180min "starting soon" window.
+        start: { utc: '2026-09-15T18:00:00Z', timeZone: 'Europe/Madrid', timeKnown: true },
       }
       mockedSearchEvents.mockResolvedValue({ events: [laterToday], truncated: false, failedProviders: [] })
 
