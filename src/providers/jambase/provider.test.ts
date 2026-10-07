@@ -321,7 +321,8 @@ describe('jamBaseProvider.searchEvents — categories', () => {
 
 describe('jamBaseProvider.searchEvents — mapping pipeline', () => {
   it('maps and returns mappable events', async () => {
-    mockedFetchEvents.mockResolvedValue(searchResponse({ events: [rawEvent()] }))
+    // 20:00 local, inside Tonight's 18:00-06:00 window.
+    mockedFetchEvents.mockResolvedValue(searchResponse({ events: [rawEvent({ startDate: '2026-09-19T20:00:00' })] }))
 
     const result = await jamBaseProvider.searchEvents(searchParams({ timeMode: 'tonight', referenceTime: '2026-09-19T13:00:00Z' }))
 

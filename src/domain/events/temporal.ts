@@ -77,14 +77,36 @@ export function resolveTimeWindow(mode: TimeMode, referenceTime: string, timeZon
   }
 }
 
-export function eventOverlapsWindow(event: Pick<Event, 'start' | 'end'>, window: TimeWindow): boolean {
-  const eventStart = new Date(event.start.utc).getTime()
+type EventTiming = Pick<Event, 'start' | 'end' | 'endDate'>
+
+/**
+ * When the event stops occupying time. A date-only event runs to the end of
+ * its last day; one with a known time but no end occupies only that instant.
+ */
+function resolveEventEnd(event: EventTiming): number {
+  const start = new Date(event.start.utc).getTime()
+  if (event.end) return new Date(event.end.utc).getTime()
+
+  if (!event.start.timeKnown) {
+    const { timeZone } = event.start
+    const lastDay = event.endDate ? new TZDate(`${event.endDate}T00:00:00`, timeZone) : new TZDate(start, timeZone)
+    return addDays(startOfDay(lastDay), 1).getTime()
+  }
+
+  return start
+}
+
+/** Half-open [start, end) on both sides; a bare instant counts as inside. */
+export function eventOverlapsWindow(event: EventTiming, window: TimeWindow): boolean {
+  const start = new Date(event.start.utc).getTime()
   const windowStart = new Date(window.start).getTime()
   const windowEnd = new Date(window.end).getTime()
 
-  if (eventStart >= windowEnd) return false
-  if (event.end === undefined) return true
-  return new Date(event.end.utc).getTime() > windowStart
+  if (start >= windowEnd) return false
+
+  const end = resolveEventEnd(event)
+  // A bare instant occupies no span, so it has to fall inside the window.
+  return end === start ? start >= windowStart : end > windowStart
 }
 
 export function classifyNowBucket(

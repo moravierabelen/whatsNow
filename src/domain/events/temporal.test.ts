@@ -16,6 +16,11 @@ function interval(startUtc: string, endUtc?: string, timeKnown = true): Pick<Eve
   }
 }
 
+/** A date-only run: no clock time, bounded by `endDate` rather than `end`. */
+function dateRun(startUtc: string, endDate?: string): Pick<Event, 'start' | 'end' | 'endDate'> {
+  return { start: { utc: startUtc, timeZone: MADRID, timeKnown: false }, end: undefined, endDate }
+}
+
 describe('resolveTimeWindow', () => {
   it('resolves Today as local midnight to local midnight next day', () => {
     const window = resolveTimeWindow('today', '2026-09-15T10:00:00Z', MADRID)
@@ -63,8 +68,28 @@ describe('eventOverlapsWindow — Today', () => {
     expect(eventOverlapsWindow(interval('2026-09-13T10:00:00Z', '2026-09-14T10:00:00Z'), today)).toBe(false)
   })
 
-  it('includes an event that started yesterday with an unknown end, rather than excluding it', () => {
-    expect(eventOverlapsWindow(interval('2026-09-14T10:00:00Z'), today)).toBe(true)
+  it('excludes an event that started yesterday with an unknown end, which cannot be claimed to still be running', () => {
+    expect(eventOverlapsWindow(interval('2026-09-14T10:00:00Z'), today)).toBe(false)
+  })
+
+  it('includes an event with an unknown end that starts inside the window', () => {
+    expect(eventOverlapsWindow(interval('2026-09-15T18:00:00Z'), today)).toBe(true)
+  })
+
+  it('includes a date-only run still going today, even though it began months ago', () => {
+    expect(eventOverlapsWindow(dateRun('2026-04-17T22:00:00Z', '2026-12-20'), today)).toBe(true)
+  })
+
+  it('excludes a date-only run that finished before today', () => {
+    expect(eventOverlapsWindow(dateRun('2026-04-17T22:00:00Z', '2026-09-14'), today)).toBe(false)
+  })
+
+  it('includes a date-only run on its last day, which lasts until that day ends', () => {
+    expect(eventOverlapsWindow(dateRun('2026-04-17T22:00:00Z', '2026-09-15'), today)).toBe(true)
+  })
+
+  it('includes a single date-only day, which occupies the whole day', () => {
+    expect(eventOverlapsWindow(dateRun('2026-09-14T22:00:00Z'), today)).toBe(true)
   })
 })
 

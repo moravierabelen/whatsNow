@@ -1,4 +1,4 @@
-export type EventProviderId = 'ticketmaster' | 'jambase'
+export type EventProviderId = 'ticketmaster' | 'jambase' | 'agenda-cat'
 
 export interface EventSource {
   provider: EventProviderId
