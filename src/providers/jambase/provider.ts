@@ -77,6 +77,7 @@ function mapEventsInWindow(
  * `{totalPages: 0}` instead of erroring, which would corrupt the loop.
  */
 async function searchEvents(params: EventSearchParams): Promise<EventSearchResult> {
+  // Every listing here is live music, so a search that excludes it needs no request.
   if (params.categories && !params.categories.includes('music')) {
     return { events: [], truncated: false }
   }

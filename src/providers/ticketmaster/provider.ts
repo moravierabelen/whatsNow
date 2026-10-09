@@ -13,14 +13,18 @@ const TICKETMASTER_CITY_PARAMS: Record<string, { city: string; countryCode: stri
 }
 
 /**
- * Only single values are verified against the real API, so a multi-category
- * request drops the filter rather than guessing a combination syntax.
+ * Narrows the query where Ticketmaster has an equivalent name; `other` has
+ * none, and a multi-category request has no verified syntax. Both then fetch
+ * everything and let `searchEvents` apply the category.
  */
 const CATEGORY_TO_CLASSIFICATION_NAME: Partial<Record<EventCategory, string>> = {
   music: 'Music',
   sports: 'Sports',
   'arts-and-theatre': 'Arts & Theatre',
   film: 'Film',
+  // Our `family` is the Miscellaneous segment's Family genre, and the genre
+  // name is a classification Ticketmaster accepts on its own.
+  family: 'Family',
 }
 
 function resolveLocationParams(location: EventLocation): { params: Record<string, string>; timeZone: string } {

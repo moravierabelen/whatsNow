@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { EventCategory } from '../../domain/events/event'
 import type { EventLocation, EventSearchParams } from '../../domain/events/provider'
 import { TicketmasterRequestError, fetchTicketmasterEventById, fetchTicketmasterEvents } from './client'
 import { ticketmasterProvider } from './provider'
@@ -113,6 +114,34 @@ describe('ticketmasterProvider.searchEvents — location', () => {
     ).rejects.toThrow('Coordinate-based search is not yet supported')
 
     expect(mockedFetchEvents).not.toHaveBeenCalled()
+  })
+})
+
+describe('ticketmasterProvider.searchEvents — categories', () => {
+  beforeEach(() => {
+    mockedFetchEvents.mockResolvedValue(searchResponse())
+  })
+
+  const queryFor = async (categories: EventCategory[] | undefined) => {
+    await ticketmasterProvider.searchEvents(searchParams({ categories }))
+    return mockedFetchEvents.mock.calls[0][0]
+  }
+
+  it.each([
+    ['music', 'Music'],
+    ['arts-and-theatre', 'Arts & Theatre'],
+    // Verified against the real API: the genre name filters on its own.
+    ['family', 'Family'],
+  ] as [EventCategory, string][])('narrows the query for %s', async (category, expected) => {
+    expect((await queryFor([category])).classificationName).toBe(expected)
+  })
+
+  it.each([
+    ['no category at all', undefined],
+    ['a category Ticketmaster has no name for', ['other'] as EventCategory[]],
+    ['several categories, which has no verified syntax', ['music', 'film'] as EventCategory[]],
+  ])('fetches everything and lets the aggregator filter, given %s', async (_label, categories) => {
+    expect((await queryFor(categories)).classificationName).toBeUndefined()
   })
 })
 

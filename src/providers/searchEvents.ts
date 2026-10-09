@@ -1,5 +1,5 @@
 import { getCityConfig } from '../domain/cities'
-import type { Event, EventProviderId } from '../domain/events/event'
+import type { Event, EventCategory, EventProviderId } from '../domain/events/event'
 import type {
   EventLocation,
   EventProvider,
@@ -34,6 +34,17 @@ function isInRequestedCity(location: EventLocation): (event: Event) => boolean {
 }
 
 /**
+ * Each source filters in its own vocabulary, and only as far as its API allows:
+ * Ticketmaster has no classification for `other` and simply answers with
+ * everything. Re-checked here against the category the card actually shows, so
+ * the filter means the same thing whoever answered.
+ */
+function matchesRequestedCategory(categories: EventCategory[] | undefined): (event: Event) => boolean {
+  if (!categories?.length) return () => true
+  return (event) => categories.includes(event.category)
+}
+
+/**
  * Queries every provider in parallel and merges them. Losing one does not fail
  * the search; losing all of them does, so "no events" and "nothing answered"
  * never look the same to the user.
@@ -52,7 +63,10 @@ export async function searchEvents(params: EventSearchParams): Promise<Aggregate
     (outcome): outcome is PromiseFulfilledResult<EventSearchResult> => outcome.status === 'fulfilled',
   )
 
-  const events = succeeded.flatMap((outcome) => outcome.value.events).filter(isInRequestedCity(params.location))
+  const events = succeeded
+    .flatMap((outcome) => outcome.value.events)
+    .filter(isInRequestedCity(params.location))
+    .filter(matchesRequestedCategory(params.categories))
 
   return {
     events: deduplicateEvents(events),

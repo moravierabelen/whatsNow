@@ -76,12 +76,9 @@ async function searchEvents(params: EventSearchParams): Promise<EventSearchResul
     }
   }
 
-  // Filtered on the mapped category rather than the raw tags, so what is
-  // filtered always matches what the card shows.
-  const categories = params.categories
-  const filtered = categories ? events.filter((event) => categories.includes(event.category)) : events
-
-  return { events: filtered, truncated }
+  // No category filter here: the dataset's tags have no equivalent for our
+  // `other`, and `searchEvents` enforces the category for every provider.
+  return { events, truncated }
 }
 
 async function getEventById(externalId: string): Promise<Event | null> {

@@ -213,6 +213,50 @@ describe('searchEvents (aggregator)', () => {
     })
   })
 
+  describe('keeping the result inside the category that was asked for', () => {
+    it('drops an event whose mapped category is not the one requested', async () => {
+      // The reported case: Ticketmaster has no classification for some of our
+      // categories, so it answers with everything rather than an error.
+      mockedTicketmasterSearch.mockResolvedValue({
+        events: [event('tm-music', 'ticketmaster'), { ...event('tm-kids', 'ticketmaster'), category: 'family' }],
+        truncated: false,
+      })
+
+      const result = await searchEvents(params({ categories: ['family'] }))
+
+      expect(result.events.map((e) => e.id)).toEqual(['tm-kids'])
+    })
+
+    it('filters on the mapped category, so filtering matches what the card shows', async () => {
+      mockedAgendaCatSearch.mockResolvedValue({
+        events: [{ ...event('ag-kids', 'agenda-cat'), category: 'family' }],
+        truncated: false,
+      })
+
+      expect((await searchEvents(params({ categories: ['family'] }))).events.map((e) => e.id)).toEqual(['ag-kids'])
+    })
+
+    it('keeps an event matching any of several requested categories', async () => {
+      mockedTicketmasterSearch.mockResolvedValue({
+        events: [event('tm-music', 'ticketmaster'), { ...event('tm-film', 'ticketmaster'), category: 'film' }],
+        truncated: false,
+      })
+
+      const result = await searchEvents(params({ categories: ['music', 'film'] }))
+
+      expect(result.events.map((e) => e.id)).toEqual(['tm-music', 'tm-film'])
+    })
+
+    it('returns everything when no category is requested', async () => {
+      mockedTicketmasterSearch.mockResolvedValue({
+        events: [event('tm-1', 'ticketmaster'), { ...event('tm-2', 'ticketmaster'), category: 'other' }],
+        truncated: false,
+      })
+
+      expect((await searchEvents(params())).events).toHaveLength(2)
+    })
+  })
+
   it('deduplicates a genuine cross-provider duplicate (same time/venue, matching name) into one event', async () => {
     // Full matching heuristic (name/location scenarios) is covered in
     // deduplicateEvents.test.ts — this just confirms searchEvents actually

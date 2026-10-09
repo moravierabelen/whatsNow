@@ -141,27 +141,6 @@ describe('agendaCatProvider.searchEvents — pagination', () => {
   })
 })
 
-describe('agendaCatProvider.searchEvents — categories', () => {
-  it('filters on the mapped category, so filtering matches what the card shows', async () => {
-    mockedFetch.mockResolvedValue([
-      row({ ':id': 'row-music', tags_categor_es: 'agenda:categories/concerts' }),
-      row({ ':id': 'row-kids', tags_categor_es: 'agenda:categories/infantil' }),
-    ])
-
-    const result = await agendaCatProvider.searchEvents(searchParams({ categories: ['family'] }))
-
-    expect(result.events.map((event) => event.source.externalId)).toEqual(['row-kids'])
-  })
-
-  it('returns everything when no category is requested', async () => {
-    mockedFetch.mockResolvedValue([row({ ':id': 'a' }), row({ ':id': 'b' })])
-
-    const result = await agendaCatProvider.searchEvents(searchParams())
-
-    expect(result.events).toHaveLength(2)
-  })
-})
-
 describe('agendaCatProvider.searchEvents — errors', () => {
   it('propagates client errors rather than returning empty results', async () => {
     mockedFetch.mockRejectedValue(new Error('boom'))
