@@ -175,7 +175,6 @@ Pagination and large-result handling are complete: a search now returns every ev
 
 Some areas intentionally left for later iterations:
 
-- Shareable event experiences / event detail pages
 - Map/list synchronization
 - Further mobile map interactions
 - Accessibility pass (keyboard navigation, focus states, announced results)

@@ -20,7 +20,6 @@ Users discover events through:
 - an interactive map
 - a synchronized event list
 - event previews
-- event detail pages
 
 The map is not an alternative representation of the list. It is a
 primary part of the discovery experience.
@@ -71,8 +70,7 @@ When multiple events overlap spatially, markers may be clustered.
 Selecting an event from the map or list should keep the map and list
 synchronized.
 
-Users can open an event preview and navigate to a dedicated event
-details page.
+Users can open an event preview from the map or the list.
 
 ## Discovery and filters
 
@@ -109,8 +107,7 @@ format.
 
 The sections above describe the product being aimed at. The two lists
 below are the phasing for its first cut, so a capability can belong to
-the product and still be deferred here — map/list synchronization and
-event detail pages both are.
+the product and still be deferred here — map/list synchronization is.
 
 - Map
 - Event markers
@@ -136,7 +133,6 @@ event detail pages both are.
 - Notifications
 - Calendar integration
 - Marker/list synchronization
-- Dedicated event detail pages
 - A deliberate accessibility pass
 
 The architecture should not prevent these capabilities from being
@@ -157,9 +153,8 @@ introduced later, but they should not drive unnecessary MVP complexity.
 
 For the MVP, an event must have:
 
-- a usable start date/time;
-- a physical venue with usable coordinates;
-- an external event URL.
+- a usable start date, with or without a known time;
+- a physical venue with usable coordinates.
 
 Events representing flexible-admission or timed-entry inventory
 (e.g. listings with Ticketmaster `dates.access`) are excluded from

@@ -10,6 +10,17 @@
 - Prefer simple solutions that can evolve when requirements justify it.
 - Do not introduce technology solely for portfolio value.
 - Do not silently change product requirements. If requirements are ambiguous or contradictory, surface the issue before making a product-level decision.
+- Prefer redoing work over patching it. A rewrite is not a cost, and "to avoid losing what is already done" is not an argument.
+
+## Memory
+
+- Read `MEMORY.md` before starting: it holds the current state, the work in progress and the decisions already taken.
+- Always update it when finishing a task: current state, important decisions with their why, and mistakes to avoid.
+- Record only what the repo does not already say. If it is in `README.md`, `docs/PRODUCT_SPEC.md` or a code comment, do not repeat it in memory.
+- Keep it under ~50 lines: summarize or delete what no longer earns its place.
+- If something becomes a permanent rule, propose moving it to this document instead of leaving it in memory.
+- `README.md` is the public-facing status; `MEMORY.md` is the working one. Do not let the two state the same thing.
+- Never store secrets, tokens or personal data.
 
 ## Product
 
@@ -68,6 +79,7 @@
 - Treat mobile as a first-class experience, not a reduced desktop layout.
 - The map remains the primary discovery surface across screen sizes, while the list remains a first-class alternative.
 - Use Tailwind CSS for styling and prefer its utility classes over custom CSS.
+- Import Phosphor icons by their `Icon`-suffixed names (`ArrowDownIcon`); the bare names are deprecated.
 - Keep component styling close to the component when practical.
 - Avoid introducing a separate design system or styling abstraction unless the project actually needs it.
 - Prefer semantic HTML and accessible interactive states over purely visual solutions.
@@ -84,6 +96,7 @@ Before implementing a non-trivial feature:
 5. Implement the smallest appropriate change.
 6. Validate the changes according to the Validation section.
 7. Review the resulting diff for unnecessary complexity or unrelated changes.
+8. Update `MEMORY.md` to match the new state.
 
 ## Validation
 
@@ -95,3 +108,7 @@ After making code changes:
 - Run the production build when appropriate.
 - Report the validation commands run and their results.
 - Do not consider the task complete while a relevant validation step is failing.
+
+## Commits
+
+- One short subject line, no body. The repository's history is one-liners.
