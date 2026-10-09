@@ -41,6 +41,8 @@ export interface JamBaseEvent {
   /** Comes prefixed as "jambase:<id>". */
   identifier: string
   name: string
+  /** "scheduled" | "cancelled" | "rescheduled" — a rescheduled event already carries its new `startDate`. */
+  eventStatus?: string
   url?: string
   image?: string
   /** Local time at the venue, without a UTC offset. */

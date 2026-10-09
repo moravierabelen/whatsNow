@@ -199,6 +199,23 @@ describe('mapAgendaCatEvent', () => {
     })
   })
 
+  describe('cancelled rows', () => {
+    it('drops the row she found in "starting soon"', () => {
+      const cancelled = baseEvent({
+        denominaci: 'ACTIVITAT CANCEL·LADA Concert solidari de The Tutsies a favor de Mans Unides',
+        horari: '20.30 h',
+      })
+
+      expect(mapAgendaCatEvent(cancelled, MADRID)).toBeNull()
+    })
+
+    it('keeps a row whose title merely contains the word', () => {
+      const real = baseEvent({ denominaci: 'Exposició de pintura Sempre amb les veles suspeses' })
+
+      expect(mapAgendaCatEvent(real, MADRID)).not.toBeNull()
+    })
+  })
+
   describe('categories', () => {
     it.each([
       ['agenda:categories/concerts', 'music'],

@@ -86,6 +86,18 @@ describe('mapJamBaseEvent', () => {
     expect(result).toBeNull()
   })
 
+  it('rejects a cancelled event', () => {
+    expect(mapJamBaseEvent(baseEvent({ eventStatus: 'cancelled' }))).toBeNull()
+  })
+
+  it('keeps a rescheduled event, whose startDate is already the new one', () => {
+    expect(mapJamBaseEvent(baseEvent({ eventStatus: 'rescheduled' }))).not.toBeNull()
+  })
+
+  it('keeps an event with no status at all, rather than assuming the worst', () => {
+    expect(mapJamBaseEvent(baseEvent({ eventStatus: undefined }))).not.toBeNull()
+  })
+
   it('always maps category to music, regardless of genre', () => {
     expect(mapJamBaseEvent(baseEvent({ performer: [{ genre: ['edm'] }] }))?.category).toBe('music')
     expect(mapJamBaseEvent(baseEvent({ performer: [{ genre: [] }] }))?.category).toBe('music')

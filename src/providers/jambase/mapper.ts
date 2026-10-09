@@ -112,6 +112,7 @@ export function mapJamBaseEvent(raw: JamBaseEvent): Event | null {
   try {
     const externalId = extractExternalId(raw.identifier)
     if (!externalId) return null
+    if (raw.eventStatus === 'cancelled') return null
 
     const timeZone = raw.location?.address?.['x-timezone']
     if (!raw.startDate || !timeZone) return null

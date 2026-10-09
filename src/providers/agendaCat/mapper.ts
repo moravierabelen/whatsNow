@@ -2,6 +2,7 @@ import { TZDate } from '@date-fns/tz'
 import { encodeEventId } from '../../domain/events/eventId'
 import type { Event, EventCategory, EventImage, Venue } from '../../domain/events/event'
 import type { Weekday } from '../../domain/events/openingHours'
+import { isCancelledByName } from './cancelled'
 import { parseHorari, type Horari } from './horari'
 import type { AgendaCatEvent } from './types'
 
@@ -125,6 +126,7 @@ export function mapAgendaCatEvent(raw: AgendaCatEvent, timeZone: string): Event 
   try {
     const externalId = raw[':id']
     if (!externalId || !raw.denominaci) return null
+    if (isCancelledByName(raw.denominaci)) return null
 
     const startDate = parseLocalDate(raw.data_inici)
     if (!startDate) return null
