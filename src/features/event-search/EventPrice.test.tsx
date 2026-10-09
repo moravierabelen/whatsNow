@@ -9,23 +9,30 @@ describe('EventPrice', () => {
     expect(screen.getByText('20 EUR')).toBeInTheDocument()
   })
 
-  it('falls back to "View tickets" when there is no price but the card links out', () => {
+  it('marks a priced row as leaving the site too, since the whole row is the link', () => {
+    render(<EventPrice priceRange={{ currency: 'EUR', min: 0, max: 0 }} hasLink />)
+
+    expect(screen.getByText('Free')).toBeInTheDocument()
+    expect(screen.getByText("Opens the event's own page")).toBeInTheDocument()
+  })
+
+  it('still marks the link when there is no price to show', () => {
     render(<EventPrice priceRange={undefined} hasLink />)
 
-    expect(screen.getByText('View tickets')).toBeInTheDocument()
+    expect(screen.getByText("Opens the event's own page")).toBeInTheDocument()
   })
 
   it('renders nothing when there is neither a price nor anywhere to go', () => {
-    // Promising "View tickets" on a card that does not link anywhere would
-    // be a dead end — a public listing with no page of its own.
+    // A public listing with no page of its own: an affordance here would be a dead end.
     const { container } = render(<EventPrice priceRange={undefined} hasLink={false} />)
 
     expect(container).toBeEmptyDOMElement()
   })
 
-  it('still shows a known price on an unlinked card', () => {
+  it('shows a known price on an unlinked card, and nothing to click', () => {
     render(<EventPrice priceRange={{ currency: 'EUR', min: 0, max: 0 }} hasLink={false} />)
 
     expect(screen.getByText('Free')).toBeInTheDocument()
+    expect(screen.queryByText("Opens the event's own page")).not.toBeInTheDocument()
   })
 })

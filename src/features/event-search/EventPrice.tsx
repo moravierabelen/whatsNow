@@ -8,16 +8,24 @@ interface EventPriceProps {
   hasLink: boolean
 }
 
-/** Price when known, else "View tickets" — but never a CTA on a card that links nowhere. */
+/**
+ * Two separate things that used to share this slot: the price is information,
+ * the arrow is the affordance. Sharing it meant a priced row offered nothing
+ * to click, so "Free" read as a label while being the whole row's link.
+ */
 export function EventPrice({ priceRange, hasLink }: EventPriceProps) {
   const price = formatPrice(priceRange)
-  if (price) return <span className="font-mono">{price}</span>
-  if (!hasLink) return null
+  if (!price && !hasLink) return null
 
   return (
     <span className="inline-flex items-center gap-1">
-      View tickets
-      <ArrowSquareOutIcon className="h-3 w-3 shrink-0" weight="bold" aria-hidden="true" />
+      {price && <span className="font-mono">{price}</span>}
+      {hasLink && (
+        <>
+          <span className="sr-only">Opens the event's own page</span>
+          <ArrowSquareOutIcon className="h-3 w-3 shrink-0" weight="bold" aria-hidden="true" />
+        </>
+      )}
     </span>
   )
 }
