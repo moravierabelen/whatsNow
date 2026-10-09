@@ -1,7 +1,7 @@
 import { XIcon } from '@phosphor-icons/react'
 import { useEffect, useState } from 'react'
 import type { Event } from '../../domain/events/event'
-import { displayEventName, formatEventTime } from '../event-search/eventDisplay'
+import { displayEventName, formatEventSchedule } from '../event-search/eventDisplay'
 import { EventThumbnail } from '../event-search/EventThumbnail'
 
 const EXIT_DURATION_MS = 180
@@ -60,7 +60,7 @@ export function MarkerPreviewCard({ event, referenceTime, onClose }: MarkerPrevi
       <div className="min-w-0 flex-1">
         <p className="line-clamp-2 text-[13px] font-semibold leading-snug text-ink">{displayEventName(renderedEvent)}</p>
         <p className="mt-0.5 truncate text-xs text-ink-muted">{renderedEvent.venue.name}</p>
-        <p className="mt-0.5 truncate font-mono text-xs text-ink-muted">{formatEventTime(renderedEvent, referenceTime)}</p>
+        <p className="mt-0.5 truncate font-mono text-xs text-ink-muted">{formatEventSchedule(renderedEvent, referenceTime)}</p>
       </div>
       <button
         type="button"

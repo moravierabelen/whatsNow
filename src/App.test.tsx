@@ -113,6 +113,26 @@ describe('App', () => {
     expect(container.querySelector('.leaflet-container')).not.toBeInTheDocument()
   })
 
+  it('still renders the map when nothing can be featured, since the two are unrelated', async () => {
+    // The reported bug: with a category whose results are all date-only
+    // (`?mode=today&category=arts-and-theatre`), no event qualifies as
+    // featured and the whole hero — map included — used to disappear.
+    const dateOnly: Event = {
+      ...SAMPLE_EVENT,
+      id: 'evt-date-only',
+      category: 'arts-and-theatre',
+      start: { utc: '2026-09-15T22:00:00Z', timeZone: 'Europe/Madrid', timeKnown: false },
+      endDate: '2026-12-20',
+    }
+    mockedSearchEvents.mockResolvedValue({ events: [dateOnly], truncated: false, failedProviders: [] })
+
+    const { container } = renderApp('/?mode=today&category=arts-and-theatre')
+
+    expect(await screen.findByText('Test Concert')).toBeInTheDocument()
+    expect(container.querySelector('.leaflet-container')).toBeInTheDocument()
+    expect(container.querySelector('.hero-panel')).not.toBeInTheDocument()
+  })
+
   it('shows an explicit empty state when the search resolves with no events (non-now mode)', async () => {
     mockedSearchEvents.mockResolvedValue({ events: [], truncated: false, failedProviders: [] })
 
@@ -150,7 +170,7 @@ describe('App', () => {
       const { container } = renderApp('/')
 
       expect(await screen.findByText('Nothing happening right now.')).toBeInTheDocument()
-      const cta = screen.getByText("Explore what's coming up later today")
+      const cta = screen.getByText("Explore what else is on today")
       expect(cta.closest('a')).toHaveAttribute('href', '#more-plans')
       expect(container.querySelector('.hero-panel')).not.toBeInTheDocument()
       expect(container.querySelector('.leaflet-container')).toBeInTheDocument()

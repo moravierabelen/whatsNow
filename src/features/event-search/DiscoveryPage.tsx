@@ -1,4 +1,5 @@
 import { ArrowDownIcon } from '@phosphor-icons/react'
+import { getCityConfig } from '../../domain/cities'
 import type { EventCategory } from '../../domain/events/event'
 import type { TimeMode } from '../../domain/events/provider'
 import { pluralize } from '../../lib/pluralize'
@@ -7,12 +8,18 @@ import { BrandHeader } from './BrandHeader'
 import { CATEGORY_LABEL } from './categoryPresentation'
 import { CategoryNav } from './CategoryNav'
 import { EmptyState } from './EmptyState'
-import { formatEventTime, formatWeekdayTime, isEventLiveNow } from './eventDisplay'
-import { groupByNowBucket, selectFeaturedEvent, sortByStart } from './eventSelection'
+import {
+  formatEventTime,
+  formatOpenState,
+  formatWeekdayTime,
+  isEventImminent,
+  isEventLiveNow,
+} from './eventDisplay'
+import { selectFeaturedEvent, splitByTiming } from './eventSelection'
 import { EventListItem } from './EventListItem'
 import { FeaturedEvent } from './FeaturedEvent'
 import { LoadingRadar } from './LoadingRadar'
-import { NowBucketedListing } from './NowBucketedListing'
+import { SectionLabel } from './SectionLabel'
 import { TimeNav } from './TimeNav'
 import { useEventSearchFromUrl } from './useEventSearchFromUrl'
 import { useSetSearchUrlState } from './useSetSearchUrlState'
@@ -30,6 +37,7 @@ export function DiscoveryPage() {
   const setSearchUrlState = useSetSearchUrlState()
 
   const category: EventCategory | 'all' = urlState.categories?.[0] ?? 'all'
+  const city = urlState.citySlug ? getCityConfig(urlState.citySlug) : undefined
 
   function handleModeChange(timeMode: TimeMode) {
     setSearchUrlState({ ...urlState, timeMode })
@@ -57,9 +65,9 @@ export function DiscoveryPage() {
     </header>
   )
 
-  // Disabled query (no valid EventSearchParams yet, e.g. an unsupported
-  // city) — not loading, not an error, just nothing to search for.
-  if (fetchStatus === 'idle' && isPending) {
+  // Nothing to search for: an unsupported city, or a query still disabled
+  // for want of valid `EventSearchParams` — neither loading nor an error.
+  if (!city || (fetchStatus === 'idle' && isPending)) {
     return <div className="min-h-svh bg-paper">{header}</div>
   }
 
@@ -101,16 +109,17 @@ export function DiscoveryPage() {
   const referenceTime = new Date().toISOString()
   const isNowMode = urlState.timeMode === 'now'
 
-  const nowBuckets = isNowMode ? groupByNowBucket(events, referenceTime) : null
-  const showFeaturedHero =
-    nowBuckets === null || nowBuckets.happeningNow.length + nowBuckets.startingSoon.length > 0
-  const hasLaterToday = nowBuckets !== null && nowBuckets.laterToday.length > 0
-
+  // The hero promises something imminent — a plan at 20:00 seen at 10:00 is not.
+  const showFeaturedHero = !isNowMode || events.some(event => isEventImminent(event, referenceTime))
   const featured = showFeaturedHero ? selectFeaturedEvent(events, referenceTime) : undefined
   // Only exclude the featured pick from the listing when it's actually
   // shown as featured — otherwise (reduced 'now' hero) it must still
   // surface via "More plans", or it disappears from the page entirely.
-  const rest = sortByStart(featured ? events.filter(event => event.id !== featured.id) : events)
+  const sections = splitByTiming(
+    featured ? events.filter(event => event.id !== featured.id) : events,
+    referenceTime,
+  )
+  const hasListing = sections.timed.length > 0 || sections.open.length > 0
   const { eyebrow, headline } = MODE_HEADLINE[urlState.timeMode]
 
   // Two causes, two remedies: a failed source may recover, a truncated one needs narrowing.
@@ -137,12 +146,12 @@ export function DiscoveryPage() {
             <div className="hero-anim-count mt-2 flex flex-col gap-1 text-sm text-ink-muted lg:flex-row">
               <p>Nothing happening right now.</p>
               <p>
-                {hasLaterToday ? (
+                {hasListing ? (
                   <a
                     href="#more-plans"
                     className="inline-flex items-center gap-1 text-ink-muted transition-colors hover:text-ink"
                   >
-                    Explore what's coming up later today
+                    Explore what else is on today
                     <ArrowDownIcon
                       className="h-3.5 w-3.5 shrink-0 text-accent"
                       weight="bold"
@@ -177,15 +186,17 @@ export function DiscoveryPage() {
           <EmptyState onClearFilters={category !== 'all' ? clearFilters : undefined} />
         ) : (
           <div className="flex flex-col gap-14">
-            {(isNowMode || featured) && (
+            {(isNowMode || events.length > 0) && (
               <section className="hero-anim-feature flex flex-col gap-3">
                 <div
                   className={`hero-grid grid grid-cols-1 gap-4 lg:h-110 lg:gap-0 ${featured ? 'lg:grid-cols-[3fr_2fr]' : ''}`}
                 >
+                  {/* Every event in the listing, so the map never contradicts it. */}
                   <div className="map-surface h-[50vh] w-full lg:h-full">
                     <EventMap
-                      events={showFeaturedHero ? events.filter(event => event.start.timeKnown) : []}
+                      events={events}
                       referenceTime={referenceTime}
+                      center={{ latitude: city.latitude, longitude: city.longitude }}
                     />
                   </div>
                   {featured && (
@@ -201,26 +212,42 @@ export function DiscoveryPage() {
               </section>
             )}
 
-            {rest.length > 0 && (
-              <section id="more-plans">
-                <h2 className="mb-4 text-lg font-semibold text-ink">More plans</h2>
-                {isNowMode ? (
-                  <NowBucketedListing events={rest} referenceTime={referenceTime} />
-                ) : (
-                  <ul className="listing-grid grid grid-cols-1 lg:grid-cols-2 lg:gap-x-12">
-                    {rest.map(event => (
-                      <EventListItem
-                        key={event.id}
-                        event={event}
-                        live={isEventLiveNow(event, referenceTime)}
-                        timeLabel={
-                          urlState.timeMode === 'weekend'
-                            ? formatWeekdayTime(event)
-                            : formatEventTime(event, referenceTime)
-                        }
-                      />
-                    ))}
-                  </ul>
+            {hasListing && (
+              <section id="more-plans" className="flex flex-col gap-10">
+                <h2 className="sr-only">More plans</h2>
+                {sections.timed.length > 0 && (
+                  <div>
+                    <SectionLabel count={sections.timed.length}>At a set time</SectionLabel>
+                    <ul className="listing-grid grid grid-cols-1 lg:grid-cols-2 lg:gap-x-12">
+                      {sections.timed.map(event => (
+                        <EventListItem
+                          key={event.id}
+                          event={event}
+                          live={isEventLiveNow(event, referenceTime)}
+                          timeLabel={
+                            urlState.timeMode === 'weekend'
+                              ? formatWeekdayTime(event)
+                              : formatEventTime(event, referenceTime)
+                          }
+                        />
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {sections.open.length > 0 && (
+                  <div>
+                    <SectionLabel count={sections.open.length}>Open to visit</SectionLabel>
+                    <ul className="listing-grid grid grid-cols-1 lg:grid-cols-2 lg:gap-x-12">
+                      {sections.open.map(event => (
+                        <EventListItem
+                          key={event.id}
+                          event={event}
+                          live={false}
+                          timeLabel={formatOpenState(event, referenceTime)}
+                        />
+                      ))}
+                    </ul>
+                  </div>
                 )}
               </section>
             )}

@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import type { Event } from '../../domain/events/event'
-import { displayEventName, formatEventTime, formatWeekdayTime } from './eventDisplay'
+import {
+  displayEventName,
+  formatEventTime,
+  formatOpenState,
+  formatRunExtent,
+  formatWeekdayTime,
+} from './eventDisplay'
 
 const MADRID = 'Europe/Madrid'
 
@@ -28,25 +34,6 @@ describe('formatWeekdayTime', () => {
     expect(formatWeekdayTime(dateOnly)).toBe('Fri · Time TBA')
   })
 
-  it('formats a date-only, multi-day event as an absolute weekday range, with no "Time TBA"', () => {
-    const festival = event({
-      start: { utc: '2026-09-24T22:00:00.000Z', timeZone: MADRID, timeKnown: false }, // Fri
-      endDate: '2026-09-26', // Sat
-    })
-
-    expect(formatWeekdayTime(festival)).toBe('Fri–Sat')
-  })
-
-  it('formats a 3-day date-only event as "Mon–Wed"', () => {
-    const festival = event({
-      // Local midnight Europe/Madrid on 2026-09-21 (Monday).
-      start: { utc: '2026-09-20T22:00:00.000Z', timeZone: MADRID, timeKnown: false },
-      endDate: '2026-09-23', // Wed
-    })
-
-    expect(formatWeekdayTime(festival)).toBe('Mon–Wed')
-  })
-
   it('never shows a range when the start time is known, even if endDate is the next day', () => {
     // A show starting Friday 23:00 and running past midnight into
     // Saturday — still "that day", not a range, per product rule.
@@ -70,7 +57,6 @@ describe('formatWeekdayTime', () => {
 
 describe('formatEventTime', () => {
   const friday = '2026-09-25T10:00:00.000Z' // referenceTime: Friday morning
-  const saturday = '2026-09-26T10:00:00.000Z' // referenceTime: Saturday morning
   const sunday = '2026-09-27T10:00:00.000Z' // referenceTime: Sunday morning
 
   it('formats a known-time event with the usual Today/Tomorrow framing (regression)', () => {
@@ -87,32 +73,6 @@ describe('formatEventTime', () => {
     expect(formatEventTime(dateOnly, friday)).toBe('Today, Time TBA')
   })
 
-  it('shows the same absolute range no matter which day of the event it is viewed from', () => {
-    // Multi-day festival: Fri 2026-09-25 -> Sat 2026-09-26.
-    const festival = event({
-      start: { utc: '2026-09-24T22:00:00.000Z', timeZone: MADRID, timeKnown: false },
-      endDate: '2026-09-26',
-    })
-
-    expect(formatEventTime(festival, friday)).toBe('Fri–Sat') // viewed on day 1
-    expect(formatEventTime(festival, saturday)).toBe('Fri–Sat') // viewed on day 2 / last day
-  })
-
-  it('keeps showing the full range on the last day of a longer multi-day event', () => {
-    // Mon 2026-09-21 -> Wed 2026-09-23.
-    const festival = event({
-      start: { utc: '2026-09-20T22:00:00.000Z', timeZone: MADRID, timeKnown: false },
-      endDate: '2026-09-23',
-    })
-    const monday = '2026-09-21T10:00:00.000Z'
-    const tuesday = '2026-09-22T10:00:00.000Z'
-    const wednesday = '2026-09-23T10:00:00.000Z'
-
-    expect(formatEventTime(festival, monday)).toBe('Mon–Wed') // viewed on day 1
-    expect(formatEventTime(festival, tuesday)).toBe('Mon–Wed') // viewed on day 2 (middle)
-    expect(formatEventTime(festival, wednesday)).toBe('Mon–Wed') // viewed on the last day
-  })
-
   it('never shows a range for a known-time event that crosses midnight, even far from referenceTime', () => {
     const crossesMidnight = event({
       start: { utc: '2026-09-25T21:00:00.000Z', timeZone: MADRID, timeKnown: true }, // Fri 23:00 CEST
@@ -120,6 +80,129 @@ describe('formatEventTime', () => {
     })
 
     expect(formatEventTime(crossesMidnight, sunday)).toBe('Fri, Sep 25 · 23:00')
+  })
+})
+
+describe('formatRunExtent', () => {
+  it('shows an absolute weekday range for a short run, with no "Time TBA"', () => {
+    const festival = event({
+      start: { utc: '2026-09-24T22:00:00.000Z', timeZone: MADRID, timeKnown: false }, // Fri
+      endDate: '2026-09-26', // Sat
+    })
+
+    expect(formatRunExtent(festival)).toBe('Fri–Sat')
+  })
+
+  it('shows the same range whichever day of the run it is read on, since it names no "today"', () => {
+    const festival = event({
+      start: { utc: '2026-09-20T22:00:00.000Z', timeZone: MADRID, timeKnown: false }, // Mon
+      endDate: '2026-09-23', // Wed
+    })
+
+    expect(formatRunExtent(festival)).toBe('Mon–Wed')
+  })
+
+  it('keeps the range at six days, the longest span whose weekday names stay distinct', () => {
+    const run = event({
+      start: { utc: '2026-09-20T22:00:00.000Z', timeZone: MADRID, timeKnown: false }, // Mon
+      endDate: '2026-09-27', // the following Sunday
+    })
+
+    expect(formatRunExtent(run)).toBe('Mon–Sun')
+  })
+
+  it('switches to an end date once weekday names would repeat', () => {
+    const run = event({
+      start: { utc: '2026-09-20T22:00:00.000Z', timeZone: MADRID, timeKnown: false }, // Mon
+      endDate: '2026-09-28', // the following Monday — "Mon–Mon" would say nothing
+    })
+
+    expect(formatRunExtent(run)).toBe('Until Sep 28')
+  })
+
+  it('gives an end date for a months-long run, where a weekday range was meaningless', () => {
+    // The reported bug: an 11-month exhibition rendered as "Thu–Thu".
+    const exhibition = event({
+      start: { utc: '2026-01-20T23:00:00.000Z', timeZone: MADRID, timeKnown: false },
+      endDate: '2026-12-31',
+    })
+
+    expect(formatRunExtent(exhibition)).toBe('Until Dec 31')
+  })
+
+  it('has no extent for a single day', () => {
+    const singleDay = event({ start: { utc: '2026-09-24T22:00:00.000Z', timeZone: MADRID, timeKnown: false } })
+
+    expect(formatRunExtent(singleDay)).toBeUndefined()
+  })
+
+  it('has no extent when endDate is the start\'s own local date', () => {
+    const sameDay = event({
+      start: { utc: '2026-09-24T22:00:00.000Z', timeZone: MADRID, timeKnown: false }, // Fri
+      endDate: '2026-09-25',
+    })
+
+    expect(formatRunExtent(sameDay)).toBeUndefined()
+  })
+
+  it('has no extent when the start time is known, which decides the day on its own', () => {
+    const crossesMidnight = event({
+      start: { utc: '2026-09-25T21:00:00.000Z', timeZone: MADRID, timeKnown: true }, // Fri 23:00
+      endDate: '2026-09-26',
+    })
+
+    expect(formatRunExtent(crossesMidnight)).toBeUndefined()
+  })
+})
+
+describe('formatOpenState', () => {
+  const TUE = 2
+  const at = (hours: number) => hours * 60
+  // 12:00 local on Tuesday 2026-09-15.
+  const tuesdayNoon = '2026-09-15T10:00:00.000Z'
+
+  function openRun(overrides: Partial<Pick<Event, 'endDate' | 'openingHours'>> = {}) {
+    return {
+      start: { utc: '2026-04-17T22:00:00.000Z', timeZone: MADRID, timeKnown: false },
+      endDate: '2026-12-20',
+      ...overrides,
+    }
+  }
+
+  it('says how long it stays open when it is open now', () => {
+    const event = openRun({ openingHours: { [TUE]: [{ start: at(11), end: at(20) }] } })
+
+    expect(formatOpenState(event, tuesdayNoon)).toBe('Open now · until 20:00')
+  })
+
+  it('says when it opens when that is still ahead', () => {
+    const event = openRun({ openingHours: { [TUE]: [{ start: at(16), end: at(20) }] } })
+
+    expect(formatOpenState(event, tuesdayNoon)).toBe('Opens 16:00')
+  })
+
+  it('picks the next shift of a split day, not the one already finished', () => {
+    const event = openRun({
+      openingHours: { [TUE]: [{ start: at(9), end: at(11) }, { start: at(16), end: at(20) }] },
+    })
+
+    expect(formatOpenState(event, tuesdayNoon)).toBe('Opens 16:00')
+  })
+
+  it('falls back to the run extent once the day is over, claiming nothing about now', () => {
+    const event = openRun({ openingHours: { [TUE]: [{ start: at(9), end: at(11) }] } })
+
+    expect(formatOpenState(event, tuesdayNoon)).toBe('Until Dec 20')
+  })
+
+  it('falls back to the run extent when the source states no hours', () => {
+    expect(formatOpenState(openRun(), tuesdayNoon)).toBe('Until Dec 20')
+  })
+
+  it('admits it plainly when there is neither an extent nor any hours', () => {
+    const event = { start: { utc: '2026-09-14T22:00:00.000Z', timeZone: MADRID, timeKnown: false } }
+
+    expect(formatOpenState(event, tuesdayNoon)).toBe('Hours not listed')
   })
 })
 

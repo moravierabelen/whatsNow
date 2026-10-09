@@ -1,4 +1,5 @@
-import type { Coordinates, Event } from '../domain/events/event'
+import type { Event } from '../domain/events/event'
+import { distanceMeters } from '../domain/geo'
 
 /**
  * Cross-provider duplicate detection for `searchEvents`'s combined results
@@ -89,23 +90,10 @@ export function namesLikelyMatch(nameA: string, venueNameA: string, nameB: strin
   return shared >= 1 && Math.min(tokensA.size, tokensB.size) === 1
 }
 
-function haversineDistanceMeters(a: Coordinates, b: Coordinates): number {
-  const EARTH_RADIUS_METERS = 6371000
-  const toRadians = (degrees: number) => (degrees * Math.PI) / 180
-
-  const dLat = toRadians(b.latitude - a.latitude)
-  const dLon = toRadians(b.longitude - a.longitude)
-  const lat1 = toRadians(a.latitude)
-  const lat2 = toRadians(b.latitude)
-
-  const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2
-  return 2 * EARTH_RADIUS_METERS * Math.asin(Math.sqrt(h))
-}
-
 function areDuplicates(a: Event, b: Event): boolean {
   if (!a.start.timeKnown || !b.start.timeKnown) return false
   if (a.start.utc !== b.start.utc) return false
-  if (haversineDistanceMeters(a.venue.coordinates, b.venue.coordinates) > DISTANCE_THRESHOLD_METERS) return false
+  if (distanceMeters(a.venue.coordinates, b.venue.coordinates) > DISTANCE_THRESHOLD_METERS) return false
   return namesLikelyMatch(a.name, a.venue.name, b.name, b.venue.name)
 }
 

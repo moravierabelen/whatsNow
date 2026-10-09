@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { MapContainer, Marker, TileLayer } from 'react-leaflet'
 import MarkerClusterGroup from 'react-leaflet-cluster'
 import 'leaflet/dist/leaflet.css'
@@ -12,45 +12,25 @@ import { MarkerPreviewCard } from './MarkerPreviewCard'
 
 const DEFAULT_ZOOM = 13
 
-// Barcelona — this MVP's only supported city, used only as the last-resort
-// map center when there are no events and the caller didn't pass its own
-// `defaultCenter`. EventMap itself has no city knowledge beyond this
-// fallback; a caller targeting a different city should pass `defaultCenter`.
-const FALLBACK_CENTER: Coordinates = { latitude: 41.3851, longitude: 2.1734 }
-
 export interface EventMapProps {
   events: Event[]
   /** Needed to format the marker preview card's date/time — explicit, same rule as the rest of the app (see `temporal.ts`). */
   referenceTime: string
-  defaultCenter?: Coordinates
-}
-
-/** Simple average of event venue coordinates — not a viewport fit, just a reasonable initial center. */
-function centroid(coordinates: Coordinates[]): Coordinates {
-  const total = coordinates.reduce(
-    (sum, coordinate) => ({
-      latitude: sum.latitude + coordinate.latitude,
-      longitude: sum.longitude + coordinate.longitude,
-    }),
-    { latitude: 0, longitude: 0 },
-  )
-  return { latitude: total.latitude / coordinates.length, longitude: total.longitude / coordinates.length }
+  /**
+   * The city being searched. Fixed rather than derived from the events: an
+   * average drifts with a single far-off venue, and jumps on every filter
+   * change, while the reader expects the map of the city they asked for.
+   */
+  center: Coordinates
 }
 
 /**
  * The parent must give this an explicit height or Leaflet renders nothing.
  * `center`/`zoom` are the initial view only; they do not re-center on prop changes.
  */
-export function EventMap({ events, referenceTime, defaultCenter }: EventMapProps) {
+export function EventMap({ events, referenceTime, center }: EventMapProps) {
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null)
   const selectedEvent = events.find((event) => event.id === selectedEventId) ?? null
-
-  const center = useMemo(() => {
-    if (events.length === 0) {
-      return defaultCenter ?? FALLBACK_CENTER
-    }
-    return centroid(events.map((event) => event.venue.coordinates))
-  }, [events, defaultCenter])
 
   return (
     <div className="relative h-full w-full">

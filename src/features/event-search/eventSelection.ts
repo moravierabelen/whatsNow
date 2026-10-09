@@ -1,5 +1,6 @@
+import { TZDate } from '@date-fns/tz'
 import type { Event } from '../../domain/events/event'
-import { classifyNowBucket } from '../../domain/events/temporal'
+import { OPEN_STATE_RANK, resolveOpenState, type OpenState } from '../../domain/events/openingHours'
 import { isEventLiveNow } from './eventDisplay'
 
 /**
@@ -35,22 +36,43 @@ export function sortByStart(events: Event[]): Event[] {
   return [...events].sort((a, b) => new Date(a.start.utc).getTime() - new Date(b.start.utc).getTime())
 }
 
-export interface NowBuckets {
-  happeningNow: Event[]
-  startingSoon: Event[]
-  laterToday: Event[]
+export interface EventSections {
+  /** Plans you have to be at by a certain time. */
+  timed: Event[]
+  /** Plans you can drop into while they are open. */
+  open: Event[]
 }
 
-/** Splits events into the three "Now" mode groups using the domain's own
- * `classifyNowBucket` — each event is classified against its own venue
- * timezone. Each group comes back chronologically sorted. */
-export function groupByNowBucket(events: Event[], referenceTime: string): NowBuckets {
-  const buckets: NowBuckets = { happeningNow: [], startingSoon: [], laterToday: [] }
-  for (const event of sortByStart(events)) {
-    const bucket = classifyNowBucket(event, referenceTime, event.start.timeZone)
-    if (bucket === 'happening-now') buckets.happeningNow.push(event)
-    else if (bucket === 'starting-soon') buckets.startingSoon.push(event)
-    else if (bucket === 'later-today') buckets.laterToday.push(event)
+/** Whatever the state, the soonest thing to act on sorts first. */
+function openSortKey(event: Event, open: OpenState): number {
+  if (open.state === 'open') return open.closesAt
+  if (open.state === 'opens-later') return open.opensAt
+  return event.endDate
+    ? new TZDate(`${event.endDate}T00:00:00`, event.start.timeZone).getTime()
+    : new Date(event.start.utc).getTime()
+}
+
+function sortOpenRuns(events: Event[], referenceTime: string): Event[] {
+  return events
+    .map((event) => ({ event, open: resolveOpenState(event.openingHours, referenceTime, event.start.timeZone) }))
+    .sort(
+      (a, b) =>
+        OPEN_STATE_RANK[a.open.state] - OPEN_STATE_RANK[b.open.state] ||
+        openSortKey(a.event, a.open) - openSortKey(b.event, b.open),
+    )
+    .map(({ event }) => event)
+}
+
+/**
+ * Splits on the only distinction the reader acts on: whether they have to be
+ * somewhere at a time, or can go whenever the doors are open.
+ */
+export function splitByTiming(events: Event[], referenceTime: string): EventSections {
+  return {
+    timed: sortByStart(events.filter((event) => event.start.timeKnown)),
+    open: sortOpenRuns(
+      events.filter((event) => !event.start.timeKnown),
+      referenceTime,
+    ),
   }
-  return buckets
 }

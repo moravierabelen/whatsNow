@@ -180,6 +180,39 @@ describe('searchEvents (aggregator)', () => {
     expect(result.truncated).toBe(true)
   })
 
+  describe('keeping the result inside the city that was asked for', () => {
+    /** Sant Celoni: ~55km out, yet tagged `municipi=barcelona` upstream. */
+    const FAR_VENUE = { name: 'Auditori Carme Serrallonga', coordinates: { latitude: 41.7884, longitude: 2.7808 } }
+
+    it('drops an event whose venue is outside the city radius', async () => {
+      const far = { ...event('ag-far', 'agenda-cat'), venue: FAR_VENUE }
+      mockedAgendaCatSearch.mockResolvedValue({ events: [far], truncated: false })
+
+      expect((await searchEvents(params())).events).toEqual([])
+    })
+
+    it('keeps an event at the far edge of the radius', async () => {
+      // ~13km from the centre, inside Barcelona's configured 15km.
+      const edge = {
+        ...event('ag-edge', 'agenda-cat'),
+        venue: { name: 'Edge', coordinates: { latitude: 41.5, longitude: 2.17 } },
+      }
+      mockedAgendaCatSearch.mockResolvedValue({ events: [edge], truncated: false })
+
+      expect((await searchEvents(params())).events.map((e) => e.id)).toEqual(['ag-edge'])
+    })
+
+    it('applies to every provider, not just the one that reported the problem', async () => {
+      mockedTicketmasterSearch.mockResolvedValue({
+        events: [{ ...event('tm-far', 'ticketmaster'), venue: FAR_VENUE }],
+        truncated: false,
+      })
+      mockedJamBaseSearch.mockResolvedValue({ events: [event('jb-near', 'jambase')], truncated: false })
+
+      expect((await searchEvents(params())).events.map((e) => e.id)).toEqual(['jb-near'])
+    })
+  })
+
   it('deduplicates a genuine cross-provider duplicate (same time/venue, matching name) into one event', async () => {
     // Full matching heuristic (name/location scenarios) is covered in
     // deduplicateEvents.test.ts — this just confirms searchEvents actually

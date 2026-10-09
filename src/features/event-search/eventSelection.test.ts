@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Event } from '../../domain/events/event'
-import { groupByNowBucket, selectFeaturedEvent, sortByStart } from './eventSelection'
+import { selectFeaturedEvent, sortByStart, splitByTiming } from './eventSelection'
 
 function event(overrides: Partial<Event> = {}): Event {
   return {
@@ -39,24 +39,65 @@ describe('sortByStart', () => {
   })
 })
 
-describe('groupByNowBucket', () => {
-  it('returns each bucket chronologically sorted', () => {
-    // Reference at 12:00 local (Europe/Madrid, UTC+2 in September) — both
-    // events land well after the 180min "starting soon" cutoff, and well
-    // before local midnight, so both are unambiguously "later today".
-    const referenceTime = '2026-09-19T10:00:00.000Z'
-    const laterA = event({
-      id: 'later-a',
-      start: { utc: '2026-09-19T21:00:00.000Z', timeZone: 'Europe/Madrid', timeKnown: true }, // 23:00 local
-    })
-    const laterB = event({
-      id: 'later-b',
-      start: { utc: '2026-09-19T18:00:00.000Z', timeZone: 'Europe/Madrid', timeKnown: true }, // 20:00 local
-    })
+describe('splitByTiming', () => {
+  // 12:00 local on Tuesday 2026-09-15 (Europe/Madrid, UTC+2 in September).
+  const referenceTime = '2026-09-15T10:00:00.000Z'
+  const TUE = 2
+  const at = (hours: number) => hours * 60
 
-    const buckets = groupByNowBucket([laterA, laterB], referenceTime)
+  /** A drop-in run: no clock time of its own, bounded by `endDate`. */
+  function run(id: string, overrides: Partial<Event> = {}): Event {
+    return event({
+      id,
+      start: { utc: '2026-04-17T22:00:00.000Z', timeZone: 'Europe/Madrid', timeKnown: false },
+      endDate: '2026-12-20',
+      ...overrides,
+    })
+  }
 
-    expect(buckets.laterToday.map((e) => e.id)).toEqual(['later-b', 'later-a'])
+  it('separates plans with a clock time from drop-in runs', () => {
+    const timed = event({ id: 'timed' })
+    const open = run('open')
+
+    const sections = splitByTiming([open, timed], referenceTime)
+
+    expect(sections.timed.map((e) => e.id)).toEqual(['timed'])
+    expect(sections.open.map((e) => e.id)).toEqual(['open'])
+  })
+
+  it('orders timed plans chronologically', () => {
+    // The reported bug: a 23:45 concert buried under runs that began months ago.
+    const late = event({ id: 'late', start: { utc: '2026-09-15T21:45:00.000Z', timeZone: 'Europe/Madrid', timeKnown: true } })
+    const early = event({ id: 'early', start: { utc: '2026-09-15T16:00:00.000Z', timeZone: 'Europe/Madrid', timeKnown: true } })
+
+    expect(splitByTiming([late, early], referenceTime).timed.map((e) => e.id)).toEqual(['early', 'late'])
+  })
+
+  it('puts what is open now first, then what opens later, then what we cannot place', () => {
+    const openUntilEight = run('open-until-20', { openingHours: { [TUE]: [{ start: at(11), end: at(20) }] } })
+    const openUntilTwo = run('open-until-14', { openingHours: { [TUE]: [{ start: at(11), end: at(14) }] } })
+    const opensLater = run('opens-16', { openingHours: { [TUE]: [{ start: at(16), end: at(20) }] } })
+    const closedToday = run('closed', { openingHours: { [TUE]: 'closed' } })
+    const noHours = run('no-hours')
+
+    const sections = splitByTiming([noHours, opensLater, openUntilEight, closedToday, openUntilTwo], referenceTime)
+
+    // Within "open", the one closing soonest is the most urgent.
+    expect(sections.open.map((e) => e.id)).toEqual([
+      'open-until-14',
+      'open-until-20',
+      'opens-16',
+      'closed',
+      'no-hours',
+    ])
+  })
+
+  it('orders runs with no stated hours by the one ending soonest', () => {
+    const ends = (id: string, endDate: string) => run(id, { endDate })
+
+    const sections = splitByTiming([ends('december', '2026-12-20'), ends('october', '2026-10-05')], referenceTime)
+
+    expect(sections.open.map((e) => e.id)).toEqual(['october', 'december'])
   })
 })
 
