@@ -1,3 +1,5 @@
+import type { OpeningHours } from './openingHours'
+
 export type EventProviderId = 'ticketmaster' | 'jambase' | 'agenda-cat'
 
 export interface EventSource {
@@ -69,6 +71,12 @@ export interface Event {
    * known start time decides the event's day on its own.
    */
   endDate?: string
+  /**
+   * When the event is open on each weekday of its run. Only meaningful while
+   * `start.timeKnown` is false, same as `endDate`: a known start time already
+   * says when the event happens.
+   */
+  openingHours?: OpeningHours
   venue: Venue
   /** Absent for sources that list real events with no page of their own. */
   url?: string

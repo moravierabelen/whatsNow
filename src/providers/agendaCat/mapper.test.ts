@@ -59,20 +59,41 @@ describe('mapAgendaCatEvent', () => {
     expect(result?.source.externalId).toBe('row-abc')
   })
 
-  describe('start time', () => {
-    it('stays date-only when the schedule has no usable time', () => {
-      const result = mapAgendaCatEvent(baseEvent({ horari: 'de 10 a 20 h' }), MADRID)
-
-      expect(result?.start.timeKnown).toBe(false)
-      expect(result?.start.utc).toBe('2026-10-21T22:00:00.000Z')
-    })
-
-    it('recovers a real start time from the schedule text', () => {
+  // `data_inici` is 2026-10-22, a Thursday, still on CEST (+02:00).
+  describe('start and end time', () => {
+    it('recovers a showtime from the schedule text', () => {
       const result = mapAgendaCatEvent(baseEvent({ horari: '20.30 h' }), MADRID)
 
       expect(result?.start.timeKnown).toBe(true)
-      // 20:30 CEST -> 18:30 UTC
       expect(result?.start.utc).toBe('2026-10-22T18:30:00.000Z')
+      expect(result?.end).toBeUndefined()
+    })
+
+    it('takes both ends of an opening range', () => {
+      const result = mapAgendaCatEvent(baseEvent({ horari: 'de 10 a 20 h' }), MADRID)
+
+      expect(result?.start.utc).toBe('2026-10-22T08:00:00.000Z')
+      expect(result?.end?.utc).toBe('2026-10-22T18:00:00.000Z')
+    })
+
+    it('derives an end from the stated duration', () => {
+      const result = mapAgendaCatEvent(baseEvent({ horari: '20 h Durada aproximada: 90 minuts' }), MADRID)
+
+      expect(result?.start.utc).toBe('2026-10-22T18:00:00.000Z')
+      expect(result?.end?.utc).toBe('2026-10-22T19:30:00.000Z')
+    })
+
+    it('carries a show past midnight into the next day', () => {
+      const result = mapAgendaCatEvent(baseEvent({ horari: '23 h Durada aproximada: 90 minuts' }), MADRID)
+
+      expect(result?.start.utc).toBe('2026-10-22T21:00:00.000Z')
+      expect(result?.end?.utc).toBe('2026-10-22T22:30:00.000Z')
+    })
+
+    it('reads the weekday the event actually falls on', () => {
+      const result = mapAgendaCatEvent(baseEvent({ horari: 'Dijous: 18 h Divendres: 21 h' }), MADRID)
+
+      expect(result?.start.utc).toBe('2026-10-22T16:00:00.000Z')
     })
 
     it('handles a midnight showtime without mangling the date', () => {
@@ -80,6 +101,35 @@ describe('mapAgendaCatEvent', () => {
 
       expect(result?.start.timeKnown).toBe(true)
       expect(result?.start.utc).toBe('2026-10-21T22:00:00.000Z')
+    })
+
+    it('stays date-only when the row has no schedule at all', () => {
+      const result = mapAgendaCatEvent(baseEvent({ horari: undefined }), MADRID)
+
+      expect(result?.start.timeKnown).toBe(false)
+      expect(result?.start.utc).toBe('2026-10-21T22:00:00.000Z')
+    })
+
+    it('stays date-only when the schedule text cannot be trusted', () => {
+      const result = mapAgendaCatEvent(baseEvent({ horari: 'En dimecres alterns 18 h' }), MADRID)
+
+      expect(result?.start.timeKnown).toBe(false)
+    })
+
+    it('stays date-only when the venue is closed that weekday', () => {
+      const result = mapAgendaCatEvent(baseEvent({ horari: 'De divendres a diumenges: 18 h Dijous: tancat' }), MADRID)
+
+      expect(result?.start.timeKnown).toBe(false)
+    })
+
+    it('stays date-only for a multi-day run, whose week a single time cannot describe', () => {
+      const result = mapAgendaCatEvent(
+        baseEvent({ horari: 'de 10 a 20 h', data_fi: '2026-11-01T00:00:00.000' }),
+        MADRID,
+      )
+
+      expect(result?.start.timeKnown).toBe(false)
+      expect(result?.end).toBeUndefined()
     })
   })
 
@@ -95,6 +145,40 @@ describe('mapAgendaCatEvent', () => {
 
     it('leaves endDate undefined for a single-day run', () => {
       expect(mapAgendaCatEvent(baseEvent(), MADRID)?.endDate).toBeUndefined()
+    })
+
+    it('carries the weekly opening hours, which a run needs and a single day does not', () => {
+      const result = mapAgendaCatEvent(
+        baseEvent({
+          data_fi: '2026-11-01T00:00:00.000',
+          horari: "De dimarts a diumenges: d'11 a 20 h Dilluns: tancat",
+        }),
+        MADRID,
+      )
+
+      expect(result?.start.timeKnown).toBe(false)
+      expect(result?.openingHours).toEqual({
+        1: 'closed',
+        2: [{ start: 11 * 60, end: 20 * 60 }],
+        3: [{ start: 11 * 60, end: 20 * 60 }],
+        4: [{ start: 11 * 60, end: 20 * 60 }],
+        5: [{ start: 11 * 60, end: 20 * 60 }],
+        6: [{ start: 11 * 60, end: 20 * 60 }],
+        0: [{ start: 11 * 60, end: 20 * 60 }],
+      })
+    })
+
+    it('leaves opening hours off a single-day run, already described by start and end', () => {
+      expect(mapAgendaCatEvent(baseEvent({ horari: 'de 10 a 20 h' }), MADRID)?.openingHours).toBeUndefined()
+    })
+
+    it('leaves opening hours off a run whose schedule text cannot be trusted', () => {
+      const result = mapAgendaCatEvent(
+        baseEvent({ data_fi: '2026-11-01T00:00:00.000', horari: 'En dimecres alterns 18 h' }),
+        MADRID,
+      )
+
+      expect(result?.openingHours).toBeUndefined()
     })
   })
 

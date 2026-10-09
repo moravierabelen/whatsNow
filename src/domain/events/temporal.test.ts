@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Event } from './event'
+import type { OpeningHours } from './openingHours'
 import {
   STARTING_SOON_WINDOW_MINUTES,
   classifyNowBucket,
@@ -20,6 +21,19 @@ function interval(startUtc: string, endUtc?: string, timeKnown = true): Pick<Eve
 function dateRun(startUtc: string, endDate?: string): Pick<Event, 'start' | 'end' | 'endDate'> {
   return { start: { utc: startUtc, timeZone: MADRID, timeKnown: false }, end: undefined, endDate }
 }
+
+/** A run whose source states its opening hours, as the Agenda provider gives us. */
+function openRun(
+  startUtc: string,
+  endDate: string,
+  openingHours: OpeningHours,
+): Pick<Event, 'start' | 'end' | 'endDate' | 'openingHours'> {
+  return { ...dateRun(startUtc, endDate), openingHours }
+}
+
+const TUE = 2
+const WED = 3
+const at = (hours: number, minutes = 0) => hours * 60 + minutes
 
 describe('resolveTimeWindow', () => {
   it('resolves Today as local midnight to local midnight next day', () => {
@@ -90,6 +104,66 @@ describe('eventOverlapsWindow — Today', () => {
 
   it('includes a single date-only day, which occupies the whole day', () => {
     expect(eventOverlapsWindow(dateRun('2026-09-14T22:00:00Z'), today)).toBe(true)
+  })
+})
+
+/** The window day, 2026-09-15, is a Tuesday. */
+describe('eventOverlapsWindow — a run with stated opening hours', () => {
+  const today = resolveTimeWindow('today', '2026-09-15T10:00:00Z', MADRID)
+  const tonight = resolveTimeWindow('tonight', '2026-09-15T10:00:00Z', MADRID)
+  const RUN_START = '2026-04-17T22:00:00Z'
+  const RUN_END = '2026-12-20'
+
+  it('includes a run open today', () => {
+    const event = openRun(RUN_START, RUN_END, { [TUE]: [{ start: at(11), end: at(20) }] })
+    expect(eventOverlapsWindow(event, today)).toBe(true)
+  })
+
+  it('excludes a run closed today, which whole-day guessing would have included', () => {
+    const event = openRun(RUN_START, RUN_END, { [TUE]: 'closed', [WED]: [{ start: at(11), end: at(20) }] })
+    expect(eventOverlapsWindow(event, today)).toBe(false)
+  })
+
+  it('excludes a run whose source says nothing about today, rather than assuming it is open', () => {
+    const event = openRun(RUN_START, RUN_END, { [WED]: [{ start: at(11), end: at(20) }] })
+    expect(eventOverlapsWindow(event, today)).toBe(false)
+  })
+
+  it('excludes a run that has not started yet, even on an open weekday', () => {
+    const event = openRun('2026-10-01T22:00:00Z', '2026-12-20', { [TUE]: [{ start: at(11), end: at(20) }] })
+    expect(eventOverlapsWindow(event, today)).toBe(false)
+  })
+
+  it('excludes a run that already finished, even on an open weekday', () => {
+    const event = openRun(RUN_START, '2026-09-14', { [TUE]: [{ start: at(11), end: at(20) }] })
+    expect(eventOverlapsWindow(event, today)).toBe(false)
+  })
+
+  it('includes a run on its last day', () => {
+    const event = openRun(RUN_START, '2026-09-15', { [TUE]: [{ start: at(11), end: at(20) }] })
+    expect(eventOverlapsWindow(event, today)).toBe(true)
+  })
+
+  it('includes a showtime that falls inside the window', () => {
+    const event = openRun(RUN_START, RUN_END, { [TUE]: [{ start: at(20) }] })
+    expect(eventOverlapsWindow(event, today)).toBe(true)
+  })
+
+  describe('against Tonight, which starts at 18:00', () => {
+    it('excludes a museum that closes before the window opens', () => {
+      const event = openRun(RUN_START, RUN_END, { [TUE]: [{ start: at(10), end: at(14) }] })
+      expect(eventOverlapsWindow(event, tonight)).toBe(false)
+    })
+
+    it('includes a museum still open when the window opens', () => {
+      const event = openRun(RUN_START, RUN_END, { [TUE]: [{ start: at(10), end: at(20) }] })
+      expect(eventOverlapsWindow(event, tonight)).toBe(true)
+    })
+
+    it('reaches into the next morning, where the window continues', () => {
+      const event = openRun(RUN_START, RUN_END, { [WED]: [{ start: at(5), end: at(12) }] })
+      expect(eventOverlapsWindow(event, tonight)).toBe(true)
+    })
   })
 })
 

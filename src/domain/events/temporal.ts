@@ -1,6 +1,7 @@
 import { TZDate } from '@date-fns/tz'
 import { addDays, startOfDay } from 'date-fns'
 import type { Event } from './event'
+import { openingInstantsOn, type OpeningHours } from './openingHours'
 import type { TimeMode } from './provider'
 
 export const STARTING_SOON_WINDOW_MINUTES = 180
@@ -77,7 +78,39 @@ export function resolveTimeWindow(mode: TimeMode, referenceTime: string, timeZon
   }
 }
 
-type EventTiming = Pick<Event, 'start' | 'end' | 'endDate'>
+type EventTiming = Pick<Event, 'start' | 'end' | 'endDate' | 'openingHours'>
+
+/** Start-of-day, in the event's timezone, of the run's first and last days. */
+function runDays(event: EventTiming): { first: number; last: number } {
+  const { timeZone } = event.start
+  const first = startOfDay(new TZDate(event.start.utc, timeZone))
+  const last = event.endDate ? startOfDay(new TZDate(`${event.endDate}T00:00:00`, timeZone)) : first
+  return { first: first.getTime(), last: last.getTime() }
+}
+
+/**
+ * Walks the window's own days rather than the run's: a run can span years,
+ * while a window is at most a weekend.
+ */
+function openingHoursOverlapWindow(event: EventTiming, hours: OpeningHours, window: TimeWindow): boolean {
+  const { timeZone } = event.start
+  const windowStart = new Date(window.start).getTime()
+  const windowEnd = new Date(window.end).getTime()
+  const { first, last } = runDays(event)
+
+  for (let day = startOfDay(new TZDate(windowStart, timeZone)); day.getTime() < windowEnd; day = addDays(day, 1)) {
+    if (day.getTime() < first || day.getTime() > last) continue
+
+    for (const { open, close } of openingInstantsOn(hours, day, timeZone)) {
+      // A showtime occupies no span, so it has to fall inside the window.
+      if (close === undefined ? open >= windowStart && open < windowEnd : close > windowStart && open < windowEnd) {
+        return true
+      }
+    }
+  }
+
+  return false
+}
 
 /**
  * When the event stops occupying time. A date-only event runs to the end of
@@ -98,6 +131,9 @@ function resolveEventEnd(event: EventTiming): number {
 
 /** Half-open [start, end) on both sides; a bare instant counts as inside. */
 export function eventOverlapsWindow(event: EventTiming, window: TimeWindow): boolean {
+  // Known hours beat whole-day guessing: a museum closed today does not overlap today.
+  if (event.openingHours) return openingHoursOverlapWindow(event, event.openingHours, window)
+
   const start = new Date(event.start.utc).getTime()
   const windowStart = new Date(window.start).getTime()
   const windowEnd = new Date(window.end).getTime()

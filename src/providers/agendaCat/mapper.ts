@@ -1,7 +1,8 @@
 import { TZDate } from '@date-fns/tz'
 import { encodeEventId } from '../../domain/events/eventId'
 import type { Event, EventCategory, EventImage, Venue } from '../../domain/events/event'
-import { parseHorariStartTime } from './horari'
+import type { Weekday } from '../../domain/events/openingHours'
+import { parseHorari, type Horari } from './horari'
 import type { AgendaCatEvent } from './types'
 
 /** `imatges` holds a path relative to the agenda's own site, not a URL. */
@@ -58,6 +59,36 @@ function parseCoordinate(raw: string | undefined, min: number, max: number): num
   return value
 }
 
+const clockTime = (minutes: number) =>
+  `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`
+
+/** Midday, so a DST transition at midnight cannot shift the weekday. */
+const weekdayOf = (date: string, timeZone: string) => new TZDate(`${date}T12:00:00`, timeZone).getDay() as Weekday
+
+/**
+ * The day's first interval, for a run short enough that one day's schedule
+ * describes the whole event. A longer run needs the full week, which `Event`
+ * cannot carry yet, so it stays date-only.
+ */
+function resolveDayTimes(
+  horari: Horari | null,
+  startDate: string,
+  singleDay: boolean,
+  timeZone: string,
+): { start: number; end?: number } | null {
+  if (!horari || !singleDay) return null
+
+  const day = horari.week[weekdayOf(startDate, timeZone)]
+  if (day === undefined || day === 'closed') return null
+
+  const interval = day[0]
+  if (!interval) return null
+
+  const end =
+    interval.end ?? (horari.durationMinutes !== undefined ? interval.start + horari.durationMinutes : undefined)
+  return { start: interval.start, ...(end !== undefined && { end }) }
+}
+
 function mapVenue(raw: AgendaCatEvent): Venue | null {
   if (!raw.espai) return null
   const latitude = parseCoordinate(raw.latitud, -90, 90)
@@ -106,18 +137,28 @@ export function mapAgendaCatEvent(raw: AgendaCatEvent, timeZone: string): Event 
     const venue = mapVenue(raw)
     if (!venue) return null
 
-    const startTime = parseHorariStartTime(raw.horari)
-    const utc = toUtcInstant(`${startDate}T${startTime ?? '00:00'}:00`, timeZone)
+    const singleDay = !endDate || endDate === startDate
+    const horari = parseHorari(raw.horari)
+    const times = resolveDayTimes(horari, startDate, singleDay, timeZone)
+    const utc = toUtcInstant(`${startDate}T${times ? clockTime(times.start) : '00:00'}:00`, timeZone)
     if (!utc) return null
+
+    // Elapsed minutes from the start instant, so a show past midnight still ends correctly.
+    const end =
+      times?.end !== undefined
+        ? { utc: new Date(new Date(utc).getTime() + (times.end - times.start) * 60_000).toISOString(), timeZone }
+        : undefined
 
     return {
       id: encodeEventId({ provider: 'agenda-cat', externalId }),
       source: { provider: 'agenda-cat', externalId },
       name: raw.denominaci,
       category: mapCategory(raw.tags_categor_es),
-      start: { utc, timeZone, timeKnown: startTime !== null },
-      end: undefined,
+      start: { utc, timeZone, timeKnown: times !== null },
+      end,
       endDate: endDate && endDate !== startDate ? endDate : undefined,
+      // A single day is already described by `start`/`end`; only a run needs the week.
+      openingHours: singleDay ? undefined : horari?.week,
       venue,
       url: isUsableUrl(raw.url) ? raw.url : undefined,
       image: mapImage(raw.imatges),
