@@ -7,15 +7,12 @@ Keep it under ~50 lines: summarize or delete what no longer earns its place.
 
 - MVP deployed, client-only, no backend. Barcelona is the only city. Live providers:
   Ticketmaster, JamBase and Agenda Cultural de Catalunya.
-- Uncommitted WIP, validated and ready to commit (538 tests, typecheck, lint, build all
-  green): drop-in plans (museums, exhibitions) with opening hours. New files
-  `domain/events/openingHours.ts`, `domain/geo.ts`, `agendaCat/horari.ts` (Catalan
-  opening-hours parser), `agendaCat/cancelled.ts`. `eventSelection.splitByTiming` replaces
-  the Now buckets with timed/open sections, and `NowBucketedListing` is gone.
-  `searchEvents` enforces the city radius and the category for every provider. The map
-  centres on the city instead of the events' centroid. Cancelled rows are dropped.
-  `HappeningNowRail` and `HappeningNowCard` are now unused but not deleted — pending a
-  product decision, not dead code.
+- Two kinds of plan, not one: timed (`start.timeKnown`) and open-to-visit runs with
+  `openingHours`. The listing splits on that (`eventSelection.splitByTiming`) and so does
+  the formatting. `searchEvents` enforces the city radius and the category for every
+  provider; the map centres on the city and shows everything the listing shows.
+- `HappeningNowRail` and `HappeningNowCard` are unused but not deleted — pending a product
+  decision, not dead code.
 
 ## Decisions (and why)
 
@@ -43,7 +40,6 @@ Keep it under ~50 lines: summarize or delete what no longer earns its place.
 
 ## Next steps
 
-- Commit the validated WIP.
 - Remove the Tonight mode from the code, its tests and the README's mode table, and make
   Today start from now. Trap: weekly showtimes inside a run have no end time, so a 20:00
   show would vanish at 20:01 — apply the parsed `durationMinutes` to them first.
